@@ -1,0 +1,33 @@
+import type { MessageTree } from "../../config";
+
+/** Keys match ErrorCode in src/lib/errors. */
+export const errors: MessageTree = {
+  unauthorized: "You need to sign in to continue.",
+  forbidden: "You do not have permission for this action.",
+  not_found: "Record not found.",
+  validation_error: "Some of the information you entered is invalid. Please check it.",
+  conflict: "This record already exists.",
+  rate_limited: "Too many requests. Please wait a moment.",
+  insufficient_credits: "Insufficient credits. Required: {{required}}, available: {{available}}.",
+  provider_rate_limited: "The data provider rate limit was reached. Please try again later.",
+  provider_unavailable: "The data provider is currently unavailable.",
+  provider_error: "The data provider returned an unexpected response.",
+  invalid_business: "The business is invalid or no longer available.",
+  website_timeout: "The website did not respond in time.",
+  website_blocked: "The website could not be scanned for security reasons.",
+  website_too_large: "The website response exceeded the size limit.",
+  website_invalid_url: "The website address is invalid.",
+  ai_unavailable: "The AI service is currently unavailable.",
+  ai_invalid_output: "The AI output failed validation. Please try again.",
+  workflow_failed: "The background job failed.",
+  scan_invalid_transition: "The scan does not support this action in its current state.",
+  demo_mode_restriction: "This feature is not available in demo mode.",
+  feature_disabled: "This feature is currently disabled.",
+  internal_error: "An unexpected error occurred. Please try again.",
+  generic: "Something went wrong.",
+  tryAgain: "Try again",
+  goHome: "Back to dashboard",
+  notFoundTitle: "Page not found",
+  notFoundDescription: "The page you are looking for may have moved or been removed.",
+  supabaseNotConfigured: "Supabase is not configured. Compare .env.local with .env.example.",
+};

@@ -1,0 +1,33 @@
+import type { MessageTree } from "../../config";
+
+/** Keys match ErrorCode in src/lib/errors. */
+export const errors: MessageTree = {
+  unauthorized: "Devam etmek için giriş yapmanız gerekiyor.",
+  forbidden: "Bu işlem için yetkiniz yok.",
+  not_found: "Kayıt bulunamadı.",
+  validation_error: "Girdiğiniz bilgiler geçersiz. Lütfen kontrol edin.",
+  conflict: "Bu kayıt zaten mevcut.",
+  rate_limited: "Çok fazla istek gönderildi. Lütfen biraz bekleyin.",
+  insufficient_credits: "Yetersiz kredi. Gerekli: {{required}}, mevcut: {{available}}.",
+  provider_rate_limited: "Veri sağlayıcı istek sınırına ulaşıldı. Lütfen daha sonra tekrar deneyin.",
+  provider_unavailable: "Veri sağlayıcıya şu anda erişilemiyor.",
+  provider_error: "Veri sağlayıcıdan beklenmeyen bir yanıt alındı.",
+  invalid_business: "İşletme geçersiz veya artık mevcut değil.",
+  website_timeout: "Web sitesi zamanında yanıt vermedi.",
+  website_blocked: "Web sitesi güvenlik nedeniyle taranamadı.",
+  website_too_large: "Web sitesi yanıtı boyut sınırını aştı.",
+  website_invalid_url: "Web sitesi adresi geçersiz.",
+  ai_unavailable: "Yapay zeka servisine şu anda erişilemiyor.",
+  ai_invalid_output: "Yapay zeka çıktısı doğrulanamadı. Lütfen tekrar deneyin.",
+  workflow_failed: "Arka plan işlemi başarısız oldu.",
+  scan_invalid_transition: "Tarama bu durumda bu işlemi desteklemiyor.",
+  demo_mode_restriction: "Bu özellik demo modunda kullanılamaz.",
+  feature_disabled: "Bu özellik şu anda devre dışı.",
+  internal_error: "Beklenmeyen bir hata oluştu. Lütfen tekrar deneyin.",
+  generic: "Bir sorun oluştu.",
+  tryAgain: "Tekrar deneyin",
+  goHome: "Panele dön",
+  notFoundTitle: "Sayfa bulunamadı",
+  notFoundDescription: "Aradığınız sayfa taşınmış veya silinmiş olabilir.",
+  supabaseNotConfigured: "Supabase yapılandırılmamış. .env.local dosyasını .env.example ile karşılaştırın.",
+};
