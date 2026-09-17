@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+/.swc
+
+# Workflow DevKit local world
+.workflow-data/
+# Supabase local
+supabase/.branches
+supabase/.temp
