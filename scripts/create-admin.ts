@@ -26,9 +26,16 @@
  */
 import { randomBytes } from "node:crypto";
 
+import { loadEnvConfig } from "@next/env";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import { slugify } from "../src/lib/utils/slug";
+
+// A plain tsx script gets none of Next.js's env loading, so read .env.local
+// (and the rest of the chain, in the same order the app uses) before anything
+// reaches for process.env. Without this the script cannot see the file it tells
+// you to edit.
+loadEnvConfig(process.cwd(), true, { info: () => undefined, error: () => undefined });
 
 interface Options {
   email: string;
@@ -38,9 +45,22 @@ interface Options {
 }
 
 function parseArgs(argv: string[]): Options {
+  /**
+   * Accepts `--flag value`, `--flag=value`, and `--flag two words` unquoted.
+   *
+   * PowerShell and npm between them frequently strip the quotes from
+   * `-- --workspace "Gulten Agency"`, which would otherwise silently become
+   * "Gulten". Everything up to the next flag is taken as the value.
+   */
   const get = (flag: string): string | undefined => {
-    const i = argv.indexOf(flag);
-    return i >= 0 ? argv[i + 1] : undefined;
+    const inline = argv.find((arg) => arg.startsWith(`${flag}=`));
+    if (inline) return inline.slice(flag.length + 1).trim() || undefined;
+
+    const start = argv.indexOf(flag);
+    if (start < 0) return undefined;
+    const words: string[] = [];
+    for (let i = start + 1; i < argv.length && !argv[i].startsWith("--"); i += 1) words.push(argv[i]);
+    return words.join(" ").trim() || undefined;
   };
   const email = get("--email") ?? process.env.ADMIN_EMAIL ?? "";
   if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
@@ -68,11 +88,18 @@ function generatePassword(): string {
 
 function adminClient(): SupabaseClient {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url) fail("NEXT_PUBLIC_SUPABASE_URL is not set. Add it to .env.local or export it.");
+  // Supabase has used both names for the same secret across dashboard versions.
+  const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SECRET_KEY;
+  if (!url) {
+    fail(
+      "NEXT_PUBLIC_SUPABASE_URL is not set.\n" +
+        `  Checked .env.local, .env.development.local, .env.development and .env in ${process.cwd()}.\n` +
+        "  Set it there, or export it for this shell.",
+    );
+  }
   if (!serviceRole) {
     fail(
-      "SUPABASE_SERVICE_ROLE_KEY is not set.\n" +
+      "SUPABASE_SERVICE_ROLE_KEY is not set (SUPABASE_SECRET_KEY also accepted).\n" +
         "  Local: run `npm run db:start` and copy the printed service_role key.\n" +
         "  Hosted: Supabase dashboard > Project settings > API > service_role.",
     );
@@ -152,26 +179,59 @@ async function ensureWorkspace(client: SupabaseClient, userId: string, name: str
   throw new Error("Could not find a free workspace slug");
 }
 
+/**
+ * Default pipeline stages.
+ *
+ * Every row spells out every column on purpose. PostgREST builds one statement
+ * from the union of keys across a batch and sends NULL for any key a row omits,
+ * instead of letting the column default apply — so a row without `is_won` fails
+ * the NOT NULL constraint as soon as any sibling row mentions it.
+ */
+const DEFAULT_STAGES = [
+  { key: "new", name: "New", color: "slate", sort_order: 10, is_won: false, is_lost: false, is_default: true },
+  { key: "contacted", name: "Contacted", color: "blue", sort_order: 20, is_won: false, is_lost: false, is_default: false },
+  { key: "replied", name: "Replied", color: "violet", sort_order: 30, is_won: false, is_lost: false, is_default: false },
+  { key: "meeting", name: "Meeting", color: "amber", sort_order: 40, is_won: false, is_lost: false, is_default: false },
+  { key: "proposal", name: "Proposal", color: "orange", sort_order: 50, is_won: false, is_lost: false, is_default: false },
+  { key: "won", name: "Won", color: "emerald", sort_order: 60, is_won: true, is_lost: false, is_default: false },
+  { key: "lost", name: "Lost", color: "rose", sort_order: 70, is_won: false, is_lost: true, is_default: false },
+] as const;
+
 async function seedWorkspace(client: SupabaseClient, workspaceId: string, userId: string): Promise<void> {
-  await client.from("workspace_members").insert({ workspace_id: workspaceId, user_id: userId, role: "owner" });
-  await client.from("credit_accounts").insert({ workspace_id: workspaceId }).select("id").maybeSingle();
+  // Each step is checked: a silently swallowed failure here leaves a workspace
+  // that looks fine until the pipeline turns out to have no stages.
+  const member = await client.from("workspace_members").insert({ workspace_id: workspaceId, user_id: userId, role: "owner" });
+  if (member.error) throw member.error;
 
-  await client.from("pipeline_stages").insert([
-    { workspace_id: workspaceId, key: "new", name: "New", color: "slate", sort_order: 10, is_default: true },
-    { workspace_id: workspaceId, key: "contacted", name: "Contacted", color: "blue", sort_order: 20 },
-    { workspace_id: workspaceId, key: "replied", name: "Replied", color: "violet", sort_order: 30 },
-    { workspace_id: workspaceId, key: "meeting", name: "Meeting", color: "amber", sort_order: 40 },
-    { workspace_id: workspaceId, key: "proposal", name: "Proposal", color: "orange", sort_order: 50 },
-    { workspace_id: workspaceId, key: "won", name: "Won", color: "emerald", sort_order: 60, is_won: true },
-    { workspace_id: workspaceId, key: "lost", name: "Lost", color: "rose", sort_order: 70, is_lost: true },
-  ]);
+  const account = await client.from("credit_accounts").insert({ workspace_id: workspaceId }).select("id").maybeSingle();
+  if (account.error && account.error.code !== "23505") throw account.error;
 
-  const { data: services } = await client.from("services").select("id, sort_order").eq("active", true).returns<Array<{ id: string; sort_order: number }>>();
-  if (services && services.length > 0) {
-    await client.from("workspace_services").insert(
-      services.map((service) => ({ workspace_id: workspaceId, service_id: service.id, enabled: true, priority: service.sort_order })),
-    );
+  const stages = await client.from("pipeline_stages").insert(DEFAULT_STAGES.map((stage) => ({ ...stage, workspace_id: workspaceId })));
+  if (stages.error) throw stages.error;
+
+  const { data: services, error: servicesError } = await client
+    .from("services")
+    .select("id, sort_order")
+    .eq("active", true)
+    .returns<Array<{ id: string; sort_order: number }>>();
+  if (servicesError) throw servicesError;
+  if (!services || services.length === 0) {
+    throw new Error("No active services found. Apply supabase/seed.sql first (npm run db:apply -- supabase/seed.sql).");
   }
+
+  const workspaceServices = await client
+    .from("workspace_services")
+    .insert(services.map((service) => ({ workspace_id: workspaceId, service_id: service.id, enabled: true, priority: service.sort_order })));
+  if (workspaceServices.error) throw workspaceServices.error;
+}
+
+/** Repairs a workspace created before this script checked its own writes. */
+async function ensureStages(client: SupabaseClient, workspaceId: string): Promise<number> {
+  const { count } = await client.from("pipeline_stages").select("*", { count: "exact" }).eq("workspace_id", workspaceId).limit(1);
+  if ((count ?? 0) > 0) return count ?? 0;
+  const { error } = await client.from("pipeline_stages").insert(DEFAULT_STAGES.map((stage) => ({ ...stage, workspace_id: workspaceId })));
+  if (error) throw error;
+  return DEFAULT_STAGES.length;
 }
 
 async function main(): Promise<void> {
@@ -188,6 +248,8 @@ async function main(): Promise<void> {
   if (profileError) throw profileError;
 
   const workspace = await ensureWorkspace(client, user.id, opts.workspaceName);
+  // Idempotent repair for a workspace seeded before this script checked its writes.
+  const stageCount = await ensureStages(client, workspace.id);
 
   await client.from("profiles").update({ default_workspace_id: workspace.id }).eq("id", user.id);
 
@@ -210,6 +272,7 @@ async function main(): Promise<void> {
     Email        ${opts.email}
     Workspace    ${workspace.name} ${workspace.created ? "(created)" : "(existing)"}
     Admin area   ${appUrl}/admin
+    Stages       ${stageCount} pipeline stages
     Credits      unlimited — scans and AI drafts are recorded but never billed
 ${user.password ? `\n    Password     ${user.password}\n                 Shown once. Change it after signing in.` : ""}${magicLink ? `\n    Sign-in link ${magicLink}\n                 Single use, expires shortly.` : ""}
 

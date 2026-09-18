@@ -43,12 +43,22 @@ function Button({
   className,
   variant = "default",
   size = "default",
+  nativeButton,
+  render,
   ...props
 }: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
+  // `render` is how this style renders a button as something else, most often a
+  // Link. Base UI assumes a native <button> unless told otherwise and warns that
+  // the element loses button semantics, so default `nativeButton` to false
+  // whenever a custom element is supplied. An explicit prop still wins.
+  const isNative = nativeButton ?? render === undefined
+
   return (
     <ButtonPrimitive
       data-slot="button"
       className={cn(buttonVariants({ variant, size, className }))}
+      nativeButton={isNative}
+      render={render}
       {...props}
     />
   )

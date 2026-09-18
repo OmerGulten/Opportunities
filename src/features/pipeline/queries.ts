@@ -77,16 +77,73 @@ export async function getPipelineBoard(ctx: WorkspaceContext, query: Partial<Lis
   };
 }
 
+interface BusinessContext {
+  displayName: string | null;
+  city: string | null;
+  district: string | null;
+  overallScore: number | null;
+  primaryServiceKey: string | null;
+  websiteStatus: string | null;
+}
+
+/**
+ * Business, opportunity and service context for a set of leads, from the read
+ * model. One query for the overview and one for the service keys, regardless of
+ * how many leads there are.
+ */
+async function businessContext(ctx: WorkspaceContext, businessIds: readonly string[]): Promise<Map<string, BusinessContext>> {
+  const ids = [...new Set(businessIds)].filter(Boolean);
+  const out = new Map<string, BusinessContext>();
+  if (ids.length === 0) return out;
+
+  const { data: overview, error } = await ctx.supabase
+    .from("business_overview")
+    .select("id, display_name, city, district, overall_score, primary_service_id, website_status")
+    .in("id", ids)
+    .returns<
+      Array<{
+        id: string;
+        display_name: string | null;
+        city: string | null;
+        district: string | null;
+        overall_score: number | null;
+        primary_service_id: string | null;
+        website_status: string | null;
+      }>
+    >();
+  if (error) throw toAppError(error);
+
+  const serviceIds = [...new Set((overview ?? []).map((row) => row.primary_service_id).filter((id): id is string => Boolean(id)))];
+  const serviceKeys = new Map<string, string>();
+  if (serviceIds.length > 0) {
+    const { data: services } = await ctx.supabase.from("services").select("id, key").in("id", serviceIds).returns<Array<{ id: string; key: string }>>();
+    for (const service of services ?? []) serviceKeys.set(service.id, service.key);
+  }
+
+  for (const row of overview ?? []) {
+    out.set(row.id, {
+      displayName: row.display_name,
+      city: row.city,
+      district: row.district,
+      overallScore: row.overall_score,
+      primaryServiceKey: row.primary_service_id ? (serviceKeys.get(row.primary_service_id) ?? null) : null,
+      websiteStatus: row.website_status,
+    });
+  }
+  return out;
+}
+
 export async function listLeads(ctx: WorkspaceContext, query: Partial<ListLeadsQuery> = {}): Promise<{ items: PipelineLead[]; total: number }> {
   const limit = query.limit ?? 100;
   const offset = query.offset ?? 0;
 
+  // Leads are read plainly and the business context is joined in a second pass.
+  // A nested PostgREST embed is not worth the fragility here: `opportunities` is
+  // not directly related to `leads` (both hang off `businesses`), and naming a
+  // foreign key column as the embed target silently resolves to the wrong table.
   let builder = ctx.supabase
     .from("leads")
-    .select(
-      "*, businesses(id, business_provider_snapshots(display_name, city, district, fetched_at)), opportunities:business_id(overall_score, primary_service_id, services:primary_service_id(key))",
-      { count: "exact" },
-    )
+    .select("*", { count: "exact" })
     .eq("workspace_id", ctx.workspace.id)
     .order("updated_at", { ascending: false })
     .range(offset, offset + limit - 1);
@@ -96,28 +153,25 @@ export async function listLeads(ctx: WorkspaceContext, query: Partial<ListLeadsQ
   if (query.ownerId) builder = builder.eq("owner_id", query.ownerId);
   if (query.dueOnly) builder = builder.lte("next_follow_up_at", new Date().toISOString());
 
-  const { data, error, count } = await builder.returns<
-    Array<
-      LeadRow & {
-        businesses: { id: string; business_provider_snapshots: Array<{ display_name: string; city: string | null; district: string | null; fetched_at: string }> } | null;
-        opportunities: { overall_score: number | null; primary_service_id: string | null; services: { key: string } | null } | null;
-      }
-    >
-  >();
+  const { data, error, count } = await builder.returns<LeadRow[]>();
   if (error) throw toAppError(error);
 
-  const items: PipelineLead[] = (data ?? []).map((row) => {
-    const { businesses, opportunities, ...lead } = row;
-    // Snapshots are append-only; the newest one is the current provider view.
-    const snapshot = (businesses?.business_provider_snapshots ?? []).slice().sort((a, b) => b.fetched_at.localeCompare(a.fetched_at))[0];
+  const leads = data ?? [];
+  const context = await businessContext(
+    ctx,
+    leads.map((lead) => lead.business_id),
+  );
+
+  const items: PipelineLead[] = leads.map((lead) => {
+    const business = context.get(lead.business_id);
     return {
       ...lead,
-      businessName: snapshot?.display_name ?? null,
-      city: snapshot?.city ?? null,
-      district: snapshot?.district ?? null,
-      overallScore: opportunities?.overall_score ?? null,
-      primaryServiceKey: opportunities?.services?.key ?? null,
-      websiteStatus: null,
+      businessName: business?.displayName ?? null,
+      city: business?.city ?? null,
+      district: business?.district ?? null,
+      overallScore: business?.overallScore ?? null,
+      primaryServiceKey: business?.primaryServiceKey ?? null,
+      websiteStatus: business?.websiteStatus ?? null,
     };
   });
 
