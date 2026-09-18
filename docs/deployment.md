@@ -45,3 +45,8 @@ npm run admin:create -- --email you@example.com --workspace "Your Agency"
 This creates the account, grants platform admin, creates the workspace and marks
 its credit account unlimited, so scans and AI drafts are recorded but never
 billed. It is idempotent and prints the generated password once.
+
+
+## Scheduled maintenance
+
+`vercel.json` schedules provider-cache retention daily and monthly credit grants. Configure `CRON_SECRET` in Vercel; Vercel Cron sends it as a Bearer token. The retention job deletes expired provider snapshots in bounded batches. Do not disable the retention job for a production Google Places deployment.
