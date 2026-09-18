@@ -50,7 +50,8 @@ export async function createReport(ctx: WorkspaceContext, request: CreateReportR
   if (!snapshot) throw new NotFoundError("Business not found");
 
   const token = generateSecureToken(32);
-  const expiresAt = request.expiresInDays ? new Date(Date.now() + request.expiresInDays * 86_400_000).toISOString() : null;
+  const expiresInDays = request.expiresInDays ?? 30;
+  const expiresAt = new Date(Date.now() + expiresInDays * 86_400_000).toISOString();
 
   const { data: report, error } = await ctx.supabase
     .from("public_reports")
