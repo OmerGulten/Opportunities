@@ -1,86 +1,104 @@
 # Background Workflows
 
-Scans are long-running (hundreds of provider calls, website fetches, scoring). They run on
-Vercel Workflows (Workflow DevKit, the `workflow` npm package) so they are durable,
-resumable and observable. Locally the Local World (`.workflow-data/`) is used with no extra
-setup; on Vercel the Vercel World is used automatically once "System Environment Variables"
-are enabled (the runtime needs `VERCEL_DEPLOYMENT_ID`). Inspect runs with
+Scans are long-running: hundreds of provider calls, website fetches and scoring passes. They
+run on Vercel Workflows (the `workflow` package) so they are durable, resumable and
+observable. Locally the Local World (`.workflow-data/`) is used with no extra setup; on
+Vercel the Vercel World is selected automatically once "System Environment Variables" are
+enabled, because the runtime needs `VERCEL_DEPLOYMENT_ID`. Inspect runs with
 `npx workflow web` or `npx workflow inspect runs`.
 
 ## Files
 
 ```
 src/lib/workflows/
-  scan.workflow.ts        "use workflow": orchestration only, deterministic
-  steps/
-    load-scan.ts          "use step": load scan + workspace + config
-    reserve-credits.ts    reserve estimated credits (idempotent)
-    discover.ts           run provider search per coverage cell / category
-    dedupe.ts             dedupe by provider place_id and canonical fingerprint
-    persist-discovery.ts  upsert businesses, snapshots, scan_businesses
-    audit-business.ts     per-business audit fan-out (website / google / instagram / performance)
-    score-business.ts     signals -> service scores -> opportunity rows
-    progress.ts           update counters, emit scan_job_events, consume credits
-    finalize.ts           complete / partially_complete / fail, refund unused reservation
+  scan-state.ts              Lifecycle state machine (pure, tested)
+  scan/
+    scan.workflow.ts         "use workflow": orchestration only, deterministic, no I/O
+    refresh.workflow.ts      "use workflow": re-audits a single business on demand
+    context.ts               "use step": load scan context, reserve credits
+    discovery.ts             "use step": plan coverage, search per cell, deduplicate
+    audit.ts                 "use step": list pending, audit + score + bill one business
+    finalize.ts              "use step": status transitions, finalize, fail
+    filters.ts               Pure scan-result filters (tested)
+    shared.ts                Step helpers: admin client, job claims, counters, events
 ```
+
+Only the two `.workflow.ts` files carry the `"use workflow"` directive. Everything that
+touches the database, the providers or the credit ledger is a `"use step"` function.
 
 ## Lifecycle
 
-`created -> queued -> discovering -> deduplicating -> enriching -> auditing -> scoring -> completed | partially_completed | failed | cancelled`
+`created -> queued -> discovering -> deduplicating -> auditing -> scoring -> completed | partially_completed | failed | cancelled`
 
-`scans.status` is the single source of truth. Transitions are validated by
-`assertScanTransition(from, to)` in `lib/workflows/scan-state.ts` (tested).
+`scans.status` is the single source of truth. Every transition goes through
+`canTransition` / `assertScanTransition` in `scan-state.ts`. Invalid transitions are ignored
+rather than fatal, so a step that was already in flight cannot resurrect a cancelled scan.
 
 ## Step outline
 
-1. **loadScan(scanId)**: loads the scan, its categories, services, filters, workspace and
-   pricing rules. Throws `FatalError` if the scan is missing or already terminal.
-2. **reserveCredits**: `CreditService.reserve()` with idempotency key `scan:<id>:reserve`.
-   Fails the scan with `InsufficientCredits` if the balance is short.
-3. **discover**: for each `scan_targets` cell x category, call `PlaceProvider.searchBusinesses`.
-   Each cell is its own step attempt; provider rate limits throw `RetryableError` with
-   `retryAfter`. Results accumulate in `scan_targets.results_count` and coverage metadata.
-4. **dedupe**: dedupe by `(provider, provider_place_id)` then by `canonical_fingerprint`;
-   polygon scans filter points outside the polygon (Turf).
-5. **persistDiscovery**: upsert `businesses` (identity), insert `business_provider_snapshots`,
-   insert `scan_businesses` with `discovery_position`, `matched_category`. Idempotent via
-   unique constraints (`scan_id, business_id`).
-6. **auditBusiness(scanBusinessId)** (fan-out, bounded concurrency): fetches details with the
-   depth-appropriate field mask, runs Google Business audit, website audit (safeFetchUrl +
-   cheerio), performance provider (deep only), Instagram discovery. Writes
-   `business_audits`, `audit_findings`, `opportunity_signals`. Sets
-   `scan_businesses.audit_status`. Failure marks that business `failed` and continues.
-7. **scoreBusiness**: loads active `service_rules` for the scan's services, evaluates them
-   against signals, writes `opportunities` + `opportunity_scores`, sets
-   `opportunity_status`. Consumes the per-business credit cost (`scan:<id>:business:<bid>`).
-8. **finalize**: computes final status (`completed` if no failures, `partially_completed`
-   if some failed, `failed` if discovery failed), refunds unused reservation, records
-   `lead_activities` (scan completed), updates counters.
+1. **loadScanContext(scanId)** loads the scan with its categories, services, filters and
+   workspace locale, resolves settings and feature flags, and moves `created -> queued`.
+   A scan that is already terminal returns `proceed: false` so a replayed run exits cleanly.
+2. **reserveScanCredits(scanId)** reserves the estimated cost with the fixed key
+   `scan:<id>:reserve`. Insufficient balance fails the scan with a `FatalError` rather than
+   letting it run up a bill it cannot pay.
+3. **planCoverage(scanId)** splits the area into hex-packed coverage cells, writes one
+   `scan_targets` row per cell and category, and records the coverage notes. A provider
+   search returns at most ~20 results per call, so a large area is swept cell by cell; the
+   plan records that this is a sweep, never a census.
+4. **discoverCell(scanId, cellIndex, categoryId)** runs the provider search for one cell and
+   category, filters results to the polygon or radius, and persists identity
+   (`businesses`), the provider payload (`business_provider_snapshots`) and membership
+   (`scan_businesses`). The unique constraints make replays idempotent. Provider rate
+   limits become `RetryableError` so the runtime backs off.
+5. **dedupeScanBusinesses(scanId)** catches the same business listed under different provider
+   ids by comparing a normalised name + address + coordinate fingerprint, and marks the later
+   memberships as skipped.
+6. **listPendingBusinesses(scanId)** returns the ids still to audit.
+7. **auditAndScoreBusiness(scanId, businessId, runKey?)** does everything for one business:
+   fetch details with the depth-appropriate field mask, persist the snapshot, apply the cheap
+   filters, run the audits, persist audits, findings and signals, score against the scan's
+   services, persist the opportunity and per-service scores, apply the audit-dependent
+   filters, and consume credits. Failures are isolated: the business is marked failed and the
+   scan continues. `runKey` lets a manual refresh reuse the same step without colliding with
+   the scan's own job or its billing.
+8. **finalizeScan(scanId)** decides the final status from the counters, releases the unused
+   reservation and records the activity entry.
 
 ## Idempotency
 
-* Every credit operation has a unique `idempotency_key`; the SQL function returns the existing
-  ledger row on replay.
-* `scan_jobs.idempotency_key` (`scan:<scanId>:audit:<businessId>`) prevents processing a
-  business twice for the same scan.
-* Steps are written so re-execution after a crash produces the same DB state (upserts on
-  natural keys).
+* Every credit operation carries a unique key (`creditKeys.*`); the SQL function returns the
+  existing ledger row on replay, so a retried step cannot double-charge.
+* `scan_jobs.idempotency_key` gates each unit of work. A job that already completed is not
+  claimed again.
+* Writes use upserts on natural keys (`workspace_id, provider, provider_place_id` for
+  businesses; `scan_id, business_id` for membership; `business_id, signal_type` for signals),
+  so re-execution converges on the same state.
+
+## Filters and billing
+
+Filters are split in two (`filters.ts`). The cheap checks run on the provider profile before
+the expensive website and Instagram work, so an excluded business costs only the discovery
+fee. The rest need audit signals and run afterwards, marking the membership as skipped while
+keeping the audit data that was already paid for. At `discovery` depth the provider was never
+asked for rating, website, hours or photos, so those filters are skipped entirely rather than
+treating unknown as missing.
 
 ## Cancellation
 
-`POST /api/scans/:id/cancel` sets `status = cancelled` and calls `run.cancel()` on the
-workflow run (`scans.workflow_run_id`). Steps check `scans.status` before expensive work and
-exit early when cancelled. Finalization refunds the unused reservation.
+`POST /api/scans/:id/cancel` sets `status = cancelled`, calls `run.cancel()` on the workflow
+run and releases the reservation immediately using the same fixed key the workflow would use,
+so doing both is safe. Steps check the scan status before expensive work and exit early.
 
 ## Progress
 
-Steps update `scans.*_count` columns and append `scan_job_events`. The UI polls
-`GET /api/scans/:id` every few seconds while the scan is active (Supabase Realtime can be
-enabled later without changing the data model).
+Steps update the `scans` counters through `increment_scan_counters` and append
+`scan_job_events`. The UI polls `GET /api/scans/:id` while a scan is active; Supabase Realtime
+can be enabled later without changing the data model.
 
 ## Retries
 
-Provider and network steps use Workflow DevKit retries (default 3) with `RetryableError`
-(`retryAfter` exponential: `attempt^2 * 1000 ms`, capped) for rate limits/timeouts and
-`FatalError` for permanent conditions (invalid business, cancelled scan, insufficient
-credits). One business failure never fails the scan.
+Provider and network steps use the Workflow DevKit's retries. Transient conditions raise
+`RetryableError` with an exponential `retryAfter` (`attempt^2 * 1000 ms`, capped at 60s) or
+the provider's own `Retry-After`. Permanent conditions raise `FatalError` (missing scan,
+insufficient credits, invalid business). One business failure never fails the scan.
