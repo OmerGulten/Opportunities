@@ -12,7 +12,7 @@ import { AppError } from "@/lib/errors";
 import { createDemoFetcher } from "@/lib/demo/websites";
 import { getPerformanceProvider, getPlaceProvider } from "@/lib/providers/registry";
 import { getPolicy, snapshotExpiryDate } from "@/lib/providers/policy";
-import { ruleFromRow, scoreBusiness, serviceFromRow, signalToRow, toOpportunityRow, toOpportunityScoreRows } from "@/lib/scoring";
+import { ruleFromRow, scoreBusiness, serviceFromRow, toOpportunityRow, toOpportunityScoreRows } from "@/lib/scoring";
 import { safeFetchUrl, type SafeFetcher } from "@/lib/security/safe-fetch";
 import type { Locale } from "@/types/common";
 import type { BusinessRow, CreditPricingRuleRow, ScanRow, ServiceRow, ServiceRuleRow } from "@/types/db";
@@ -291,9 +291,7 @@ async function persistAudits(
   }
 
   // Signals are the scoring input: one row per signal type, replaced on re-audit.
-  const signalRows = input.bundle.signals.map((signal) =>
-    signalToRow(signal, { businessId: input.businessId, workspaceId: input.workspaceId, scanId: input.scanId, auditId: null }),
-  );
+  const signalRows = rows.signalRows();
   if (signalRows.length > 0) {
     const { error: signalError } = await client.from("opportunity_signals").upsert(signalRows, { onConflict: "business_id,signal_type" });
     if (signalError) throw signalError;
