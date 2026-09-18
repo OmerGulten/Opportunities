@@ -56,6 +56,7 @@ const serverSchema = z.object({
     .optional()
     .transform((v) => (v === "true" ? true : v === "false" ? false : undefined)),
   INTERNAL_API_SECRET: z.string().min(16).optional(),
+  CRON_SECRET: z.string().min(16).optional(),
   BILLING_PROVIDER: z.enum(["mock"]).default("mock"),
   FEATURE_REAL_PAYMENTS: z
     .enum(["true", "false", ""])
@@ -81,6 +82,7 @@ export function serverEnv(): ServerEnv {
     OPENAI_MODEL: process.env.OPENAI_MODEL || undefined,
     DEMO_MODE: process.env.DEMO_MODE ?? "",
     INTERNAL_API_SECRET: process.env.INTERNAL_API_SECRET || undefined,
+    CRON_SECRET: process.env.CRON_SECRET || undefined,
     BILLING_PROVIDER: process.env.BILLING_PROVIDER || undefined,
     FEATURE_REAL_PAYMENTS: process.env.FEATURE_REAL_PAYMENTS ?? "",
     LOG_LEVEL: process.env.LOG_LEVEL || undefined,
