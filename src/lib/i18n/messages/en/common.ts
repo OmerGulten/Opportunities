@@ -69,6 +69,12 @@ export const common: MessageTree = {
     heuristic: "Heuristic",
     unavailable: "Unavailable",
     label: "Evidence type",
+    hint: {
+      observed: "Seen directly in the provider response or on the page.",
+      derived: "Inferred from observed data through an explicit rule.",
+      heuristic: "Estimated with a heuristic rather than measured.",
+      unavailable: "This could not be retrieved; it does not mean it is missing.",
+    },
   },
   confidence: {
     label: "Confidence",
@@ -123,12 +129,39 @@ export const common: MessageTree = {
   },
   attribution: {
     poweredBy: "Google Maps data",
+    googleMaps: "Google Maps",
     notExhaustive: "Provider results are not an exhaustive census of every business in the area.",
+    notExhaustiveTitle: "Coverage limit",
   },
   pagination: {
     showing: "{{from}}–{{to}} of {{total}}",
     perPage: "Per page",
     page: "Page {{page}}",
+    previous: "Previous",
+    next: "Next",
+    first: "First page",
+    last: "Last page",
+  },
+  score: {
+    label: "Score",
+    outOf: "{{score}}/100",
+    notScored: "Not scored",
+    tiers: {
+      high: "High opportunity",
+      medium: "Medium opportunity",
+      low: "Low opportunity",
+    },
+  },
+  table: {
+    selectAll: "Select all rows",
+    selectRow: "Select row",
+    selectedCount: "{{count}} rows selected",
+    loading: "Loading rows",
+  },
+  steps: {
+    stepOf: "Step {{current}} of {{total}}",
+    completed: "Completed",
+    current: "Current step",
   },
   time: {
     justNow: "Just now",

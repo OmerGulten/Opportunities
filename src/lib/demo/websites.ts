@@ -178,7 +178,7 @@ const strong: Template = (site, origin) => {
 };
 
 /** Average: SEO basics and contact info present; no schema, OG, CTA or social links; some images without alt. */
-const average: Template = (site, origin) => {
+const average: Template = (site) => {
   const words = CATEGORY_WORDS[site.categoryKey];
   const home = `<!DOCTYPE html>
 <html lang="tr">

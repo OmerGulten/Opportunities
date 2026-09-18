@@ -69,6 +69,12 @@ export const common: MessageTree = {
     heuristic: "Sezgisel",
     unavailable: "Erişilemedi",
     label: "Kanıt türü",
+    hint: {
+      observed: "Sağlayıcı yanıtında veya sayfada doğrudan görülen bilgi.",
+      derived: "Gözlemlenen verilerden kural yoluyla çıkarılan bilgi.",
+      heuristic: "Ölçüm yerine sezgisel bir tahminle üretilen bilgi.",
+      unavailable: "Bu bilgiye erişilemedi; eksik olduğu anlamına gelmez.",
+    },
   },
   confidence: {
     label: "Güven",
@@ -123,12 +129,39 @@ export const common: MessageTree = {
   },
   attribution: {
     poweredBy: "Google Maps verileri",
+    googleMaps: "Google Maps",
     notExhaustive: "Sağlayıcı sonuçları bölgedeki tüm işletmelerin eksiksiz bir listesi değildir.",
+    notExhaustiveTitle: "Kapsam sınırı",
   },
   pagination: {
     showing: "{{from}}–{{to}} / {{total}}",
     perPage: "Sayfa başına",
     page: "Sayfa {{page}}",
+    previous: "Önceki",
+    next: "Sonraki",
+    first: "İlk sayfa",
+    last: "Son sayfa",
+  },
+  score: {
+    label: "Puan",
+    outOf: "{{score}}/100",
+    notScored: "Puanlanmadı",
+    tiers: {
+      high: "Yüksek fırsat",
+      medium: "Orta fırsat",
+      low: "Düşük fırsat",
+    },
+  },
+  table: {
+    selectAll: "Tüm satırları seç",
+    selectRow: "Satırı seç",
+    selectedCount: "{{count}} satır seçildi",
+    loading: "Satırlar yükleniyor",
+  },
+  steps: {
+    stepOf: "Adım {{current}} / {{total}}",
+    completed: "Tamamlandı",
+    current: "Geçerli adım",
   },
   time: {
     justNow: "Az önce",
