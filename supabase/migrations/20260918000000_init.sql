@@ -1215,6 +1215,12 @@ create or replace function public.increment_scan_counters(
   where id = p_scan;
 $$;
 
+-- Template usage counter (called after a draft is saved from a template)
+create or replace function public.increment_template_usage(p_template uuid)
+returns void language sql security definer set search_path = public as $$
+  update public.message_templates set usage_count = usage_count + 1 where id = p_template;
+$$;
+
 -- Public report view counter (called from server code for anonymous viewers)
 create or replace function public.touch_public_report(p_token text)
 returns void language sql security definer set search_path = public as $$
