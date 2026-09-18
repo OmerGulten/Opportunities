@@ -25,7 +25,7 @@ export interface ScanEstimate extends ScanCreditEstimate {
   areaKm2: number | null;
   coverageNotes: string[];
   estimatedBusinesses: number;
-  balance: { available: number; reserved: number };
+  balance: { available: number; reserved: number; unlimited: boolean };
   sufficient: boolean;
 }
 
@@ -52,19 +52,22 @@ export async function estimateScan(ctx: WorkspaceContext, input: EstimateScanInp
 
   const { data: account } = await ctx.supabase
     .from("credit_accounts")
-    .select("balance, reserved")
+    .select("balance, reserved, unlimited")
     .eq("workspace_id", ctx.workspace.id)
-    .maybeSingle<{ balance: number; reserved: number }>();
+    .maybeSingle<{ balance: number; reserved: number; unlimited: boolean }>();
 
   const available = account?.balance ?? 0;
+  // An unlimited account is never billed, so the estimate is informational only
+  // and the balance must not block the scan.
+  const unlimited = account?.unlimited === true;
   return {
     ...estimate,
     cells: plan.cells.length,
     areaKm2: plan.areaKm2,
     coverageNotes: plan.notes,
     estimatedBusinesses,
-    balance: { available, reserved: account?.reserved ?? 0 },
-    sufficient: available >= estimate.total,
+    balance: { available, reserved: account?.reserved ?? 0, unlimited },
+    sufficient: unlimited || available >= estimate.total,
   };
 }
 

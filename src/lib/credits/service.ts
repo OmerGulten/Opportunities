@@ -121,12 +121,13 @@ export class CreditService {
   async getBalance(workspaceId: string): Promise<CreditBalance> {
     assertNonEmptyString(workspaceId, "workspaceId");
     const account = await this.store.getAccount(workspaceId);
-    if (!account) return { available: 0, reserved: 0, lifetimeGranted: 0, lifetimeConsumed: 0 };
+    if (!account) return { available: 0, reserved: 0, lifetimeGranted: 0, lifetimeConsumed: 0, unlimited: false };
     return {
       available: account.balance,
       reserved: account.reserved,
       lifetimeGranted: account.lifetime_granted,
       lifetimeConsumed: account.lifetime_consumed,
+      unlimited: account.unlimited === true,
     };
   }
 

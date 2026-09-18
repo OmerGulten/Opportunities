@@ -608,6 +608,8 @@ export interface CreditAccountRow {
   workspace_id: string;
   balance: number;
   reserved: number;
+  /** Records operations without moving the balance; never fails for want of credits. */
+  unlimited: boolean;
   lifetime_granted: number;
   lifetime_consumed: number;
   created_at: string;

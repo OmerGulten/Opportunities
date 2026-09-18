@@ -34,7 +34,7 @@ describe("CreditService.reserve", () => {
     expect(row.balance_after).toBe(70);
     expect(row.reserved_after).toBe(30);
     expect(row.metadata[QUANTITY_METADATA_KEY]).toBe(30);
-    await expect(service.getBalance(WS)).resolves.toEqual({ available: 70, reserved: 30, lifetimeGranted: 100, lifetimeConsumed: 0 });
+    await expect(service.getBalance(WS)).resolves.toEqual({ available: 70, reserved: 30, lifetimeGranted: 100, lifetimeConsumed: 0, unlimited: false });
 
     const reservation = await store.getReservation(scanRef.referenceType, scanRef.referenceId);
     expect(reservation).toMatchObject({ reserved_amount: 30, consumed_amount: 0, refunded_amount: 0, status: "active" });
@@ -61,7 +61,7 @@ describe("CreditService.consume", () => {
     expect(row.amount).toBe(0);
     expect(row.balance_after).toBe(70);
     expect(row.reserved_after).toBe(20);
-    await expect(service.getBalance(WS)).resolves.toEqual({ available: 70, reserved: 20, lifetimeGranted: 100, lifetimeConsumed: 10 });
+    await expect(service.getBalance(WS)).resolves.toEqual({ available: 70, reserved: 20, lifetimeGranted: 100, lifetimeConsumed: 10, unlimited: false });
     expect(await store.getReservation(scanRef.referenceType, scanRef.referenceId)).toMatchObject({ consumed_amount: 10, status: "active" });
   });
 
@@ -181,7 +181,7 @@ describe("grant / debit / expire", () => {
     });
     expect(row.type).toBe("monthly_grant");
     expect(row.amount).toBe(50);
-    await expect(service.getBalance(WS)).resolves.toEqual({ available: 50, reserved: 0, lifetimeGranted: 50, lifetimeConsumed: 0 });
+    await expect(service.getBalance(WS)).resolves.toEqual({ available: 50, reserved: 0, lifetimeGranted: 50, lifetimeConsumed: 0, unlimited: false });
   });
 
   it("admin grant forces direction=credit even when the caller passes debit", async () => {
@@ -252,7 +252,7 @@ describe("validation", () => {
 
   it("returns a zero balance for an unknown workspace", async () => {
     const { service } = setup(100);
-    await expect(service.getBalance("other")).resolves.toEqual({ available: 0, reserved: 0, lifetimeGranted: 0, lifetimeConsumed: 0 });
+    await expect(service.getBalance("other")).resolves.toEqual({ available: 0, reserved: 0, lifetimeGranted: 0, lifetimeConsumed: 0, unlimited: false });
   });
 });
 

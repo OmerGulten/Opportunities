@@ -50,13 +50,13 @@ const ledgerRow: CreditLedgerRow = {
 };
 
 describe("createSupabaseCreditStore.apply", () => {
-  it("calls credit_apply with the expected parameters and returns the row", async () => {
+  it("calls credit_apply_scoped with the expected parameters and returns the row", async () => {
     const { client, rpc } = fakeClient({ rpc: { data: ledgerRow, error: null } });
     const store = createSupabaseCreditStore(client);
     const row = await store.apply({ workspaceId: "ws", type: "reservation", amount: 5, referenceType: "scan", referenceId: "s1", idempotencyKey: "scan:s1:reserve" });
 
     expect(row).toEqual(ledgerRow);
-    expect(rpc).toHaveBeenCalledWith("credit_apply", {
+    expect(rpc).toHaveBeenCalledWith("credit_apply_scoped", {
       p_workspace: "ws",
       p_type: "reservation",
       p_amount: 5,

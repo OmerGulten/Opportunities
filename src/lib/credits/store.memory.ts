@@ -12,6 +12,8 @@ import type { CreditApplyInput, CreditStore, LedgerListOptions } from "./types";
 export interface MemoryCreditStoreOptions {
   /** Clock override for deterministic timestamps in tests. */
   now?: () => Date;
+  /** Workspace ids whose account is never billed (mirrors credit_accounts.unlimited). */
+  unlimitedWorkspaceIds?: readonly string[];
 }
 
 export interface MemoryCreditStoreSnapshot {
@@ -58,6 +60,7 @@ export function createMemoryCreditStore(seed: Record<string, number> = {}, optio
       workspace_id: workspaceId,
       balance: 0,
       reserved: 0,
+      unlimited: false,
       lifetime_granted: 0,
       lifetime_consumed: 0,
       created_at: ts,
@@ -66,6 +69,10 @@ export function createMemoryCreditStore(seed: Record<string, number> = {}, optio
     accounts.set(workspaceId, account);
     return account;
   };
+
+  for (const workspaceId of options.unlimitedWorkspaceIds ?? []) {
+    getOrCreateAccount(workspaceId).unlimited = true;
+  }
 
   for (const [workspaceId, balance] of Object.entries(seed)) {
     if (!Number.isInteger(balance) || balance < 0) {
@@ -91,6 +98,37 @@ export function createMemoryCreditStore(seed: Record<string, number> = {}, optio
     const metadata = { ...(input.metadata ?? {}) };
     const negative = metadata.direction === "debit";
     const account = getOrCreateAccount(input.workspaceId);
+
+    // Mirrors public.credit_apply_scoped: an unlimited account records the
+    // operation but never moves a balance and never fails for want of credits.
+    if (account.unlimited) {
+      const unlimitedTs = tick();
+      if (input.type === "consumption") account.lifetime_consumed += input.amount;
+      else if (input.type === "monthly_grant" || input.type === "purchase") account.lifetime_granted += input.amount;
+      account.updated_at = unlimitedTs;
+
+      const entry: CreditLedgerRow = {
+        id: nextId("led"),
+        workspace_id: input.workspaceId,
+        account_id: account.id,
+        type: input.type,
+        amount: 0,
+        balance_after: account.balance,
+        reserved_after: account.reserved,
+        reference_type: input.referenceType,
+        reference_id: input.referenceId,
+        idempotency_key: input.idempotencyKey,
+        metadata: { ...metadata, unlimited: true },
+        created_by: input.actorId ?? null,
+        created_at: unlimitedTs,
+      };
+      // Oldest-first, like the billed path: listLedger walks the array backwards
+      // to produce newest-first, and `before` cursors depend on that order.
+      ledger.push(entry);
+      ledgerByKey.set(input.idempotencyKey, entry);
+      return clone(entry);
+    }
+
     let available = account.balance;
     let reserved = account.reserved;
     let amount = input.amount;

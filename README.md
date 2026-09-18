@@ -114,6 +114,18 @@ columns, and fails if any table is missing row level security.
 Every step is idempotent, so a crash resumes rather than double-charging. See
 [docs/workflows.md](docs/workflows.md).
 
+## First administrator
+
+Once the database is migrated and `SUPABASE_SERVICE_ROLE_KEY` is set:
+
+```bash
+npm run admin:create -- --email you@example.com --workspace "Your Agency"
+```
+
+Creates the account, grants platform admin (unlocking `/admin`), creates the workspace
+and marks its credit account **unlimited** — scans and AI drafts are still recorded, with
+real usage figures, but are never billed. Idempotent; prints the generated password once.
+
 ## Documentation
 
 | Document | Contents |
@@ -126,6 +138,7 @@ Every step is idempotent, so a crash resumes rather than double-charging. See
 | [docs/security.md](docs/security.md) | SSRF protection and its limits |
 | [docs/ai.md](docs/ai.md) | Prompting, structured output, the fact guard |
 | [docs/conventions.md](docs/conventions.md) | Coding rules for contributors |
+| [docs/deployment.md](docs/deployment.md) | Vercel setup, migrations, first admin |
 
 ## Compliance
 

@@ -91,11 +91,17 @@ export interface CreditReleaseResult {
 }
 
 export interface CreditBalance {
-  /** Spendable credits (excludes reserved). */
+  /** Spendable credits (excludes reserved). Meaningless when `unlimited`. */
   available: number;
   reserved: number;
   lifetimeGranted: number;
   lifetimeConsumed: number;
+  /**
+   * Internal / owner accounts are never billed. Usage is still recorded, so
+   * consumption figures stay real; only the balance stops mattering. Show
+   * "unlimited" rather than a number when this is true.
+   */
+  unlimited: boolean;
 }
 
 export interface CreditUsageRange {

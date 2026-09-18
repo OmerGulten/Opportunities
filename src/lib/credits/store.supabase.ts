@@ -32,7 +32,7 @@ interface RpcErrorShape {
 export function createSupabaseCreditStore(client: SupabaseClient): CreditStore {
   return {
     async apply(input: CreditApplyInput): Promise<CreditLedgerRow> {
-      const { data, error } = await client.rpc("credit_apply", {
+      const { data, error } = await client.rpc("credit_apply_scoped", {
         p_workspace: input.workspaceId,
         p_type: input.type,
         p_amount: input.amount,
@@ -44,7 +44,7 @@ export function createSupabaseCreditStore(client: SupabaseClient): CreditStore {
       });
       if (error) throw mapCreditRpcError(error);
       const row = unwrapRow(data);
-      if (!row) throw new AppError("internal_error", "credit_apply returned no ledger row", { details: { idempotencyKey: input.idempotencyKey } });
+      if (!row) throw new AppError("internal_error", "credit_apply_scoped returned no ledger row", { details: { idempotencyKey: input.idempotencyKey } });
       return row;
     },
 
