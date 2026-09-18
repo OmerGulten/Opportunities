@@ -326,13 +326,19 @@ async function persistDiscoveredPlaces(
     workspace_id: input.workspaceId,
     provider: place.provider,
     provider_place_id: place.providerPlaceId,
-    normalized_name: normalizeBusinessName(place.displayName),
-    canonical_fingerprint: canonicalFingerprint({
-      name: place.displayName,
-      address: place.formattedAddress ?? "",
-      lat: place.location?.lat ?? 0,
-      lng: place.location?.lng ?? 0,
-    }),
+    // Google Places policy does not permit us to persist provider-derived
+    // business identity fields as a secondary database. The durable identity is
+    // provider + place ID; fingerprints remain an in-memory discovery concern.
+    normalized_name: provider.name === "google_places" ? null : normalizeBusinessName(place.displayName),
+    canonical_fingerprint:
+      provider.name === "google_places"
+        ? null
+        : canonicalFingerprint({
+            name: place.displayName,
+            address: place.formattedAddress ?? "",
+            lat: place.location?.lat ?? 0,
+            lng: place.location?.lng ?? 0,
+          }),
     primary_category_id: input.categoryId,
     first_scan_id: input.scanId,
     last_seen_at: now.toISOString(),
