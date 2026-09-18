@@ -79,10 +79,11 @@ export function withInternalApi<TBody = unknown>(
 ) {
   return async (req: NextRequest, routeCtx?: { params?: Promise<Params> | Params }): Promise<Response> => {
     try {
-      const secret = serverEnv().INTERNAL_API_SECRET;
+      const env = serverEnv();
+      const secrets = [env.INTERNAL_API_SECRET, env.CRON_SECRET].filter((value): value is string => Boolean(value));
       const header = req.headers.get("authorization") ?? "";
       const token = header.startsWith("Bearer ") ? header.slice(7) : "";
-      if (!secret || !token || !timingSafeEqual(token, secret)) throw new UnauthorizedError("Invalid internal token");
+      if (!token || !secrets.some((secret) => timingSafeEqual(token, secret))) throw new UnauthorizedError("Invalid internal token");
       const params = routeCtx?.params ? await routeCtx.params : {};
       const body = await parseBody(req, options.body);
       return await handler({ req, params, body: body as TBody });
