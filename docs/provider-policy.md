@@ -34,7 +34,7 @@ snapshots are refreshed on demand from the provider or shown as stale.
 
 ## Google Places (New)
 
-* **Persistent**: `place_id` only. Google's policy exempts place IDs from caching limits.
+* **Persistent**: `place_id` only. The application deliberately does not persist Google-derived business names, addresses, coordinates or other secondary identity material.
 * **Cacheable (short-lived)**: display name, formatted address, coordinates, types, rating,
   review count, website URL, phone, opening hours, photo count, Maps URL. Default TTL is
   30 days (`cacheTtlHours = 720`), after which snapshots are considered expired.
