@@ -23,7 +23,7 @@ import type { PlaceDetails } from "@/types/places";
  */
 
 const provider = createDemoPlaceProvider({ latencyMs: 0 });
-const fetcher = createDemoFetcher() as unknown as SafeFetcher;
+const fetcher: SafeFetcher = createDemoFetcher();
 const performance = createHeuristicPerformanceProvider();
 const { services, rules } = loadDefaultRules();
 

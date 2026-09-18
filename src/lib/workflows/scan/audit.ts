@@ -187,7 +187,7 @@ auditAndScoreBusiness.maxRetries = 2;
 function fetcherFor(isDemo: boolean): SafeFetcher {
   // Demo websites are fixtures, not real hosts: the SSRF-hardened fetcher would
   // correctly refuse to resolve them, so demo runs use the fixture fetcher.
-  return isDemo ? (createDemoFetcher() as unknown as SafeFetcher) : safeFetchUrl;
+  return isDemo ? createDemoFetcher() : safeFetchUrl;
 }
 
 async function loadScan(client: SupabaseClient, scanId: string): Promise<ScanRow> {
