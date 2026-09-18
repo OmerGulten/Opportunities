@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { creditKeys, REFERENCE_TYPES } from "@/lib/credits/keys";
-import { CreditService, consumedQuantity } from "@/lib/credits/service";
+import { CreditService, ledgerQuantity } from "@/lib/credits/service";
 import { createMemoryCreditStore } from "@/lib/credits/store.memory";
 
 /**
@@ -108,7 +108,7 @@ describe("an unlimited account", () => {
     expect(usage.consumed).toBe(7);
 
     const consumption = (await service.getLedger(FREE, { limit: 50 })).filter((entry) => entry.type === "consumption");
-    expect(consumption.map(consumedQuantity)).toEqual([4, 3]);
+    expect(consumption.map(ledgerQuantity)).toEqual([4, 3]);
   });
 
   it("is still idempotent on a replayed step", async () => {

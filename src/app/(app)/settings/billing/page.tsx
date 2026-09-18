@@ -4,6 +4,7 @@ import { BillingPanel, type BillingPlanOption, type BillingSubscriptionInfo } fr
 import { CreditLedgerTable, type CreditLedgerEntry } from "@/features/settings/components/credit-ledger-table";
 import { hasRole, requireWorkspaceContext } from "@/lib/auth/context";
 import { CREDIT_PACKS, isRealPaymentsEnabled } from "@/lib/billing";
+import { ledgerQuantity } from "@/lib/credits/service";
 import { listPlans } from "@/lib/db/reference";
 import { getT } from "@/lib/i18n";
 import type { CreditLedgerRow, SubscriptionRow } from "@/types/db";
@@ -41,23 +42,23 @@ export default async function BillingSettingsPage() {
       .maybeSingle<SubscriptionRow & { plans: { key: string } | null }>(),
     ctx.supabase
       .from("credit_accounts")
-      .select("balance, reserved, lifetime_granted, lifetime_consumed")
+      .select("balance, reserved, lifetime_granted, lifetime_consumed, unlimited")
       .eq("workspace_id", workspaceId)
-      .maybeSingle<{ balance: number; reserved: number; lifetime_granted: number; lifetime_consumed: number }>(),
+      .maybeSingle<{ balance: number; reserved: number; lifetime_granted: number; lifetime_consumed: number; unlimited: boolean }>(),
     ctx.supabase
       .from("credit_ledger")
-      .select("id, type, amount, balance_after, reference_type, created_at", { count: "exact" })
+      .select("id, type, amount, balance_after, reference_type, created_at, metadata", { count: "exact" })
       .eq("workspace_id", workspaceId)
       .order("created_at", { ascending: false })
       .range(0, LEDGER_PAGE_SIZE - 1)
-      .returns<Array<Pick<CreditLedgerRow, "id" | "type" | "amount" | "balance_after" | "reference_type" | "created_at">>>(),
+      .returns<Array<Pick<CreditLedgerRow, "id" | "type" | "amount" | "balance_after" | "reference_type" | "created_at" | "metadata">>>(),
     ctx.supabase
       .from("credit_ledger")
-      .select("amount")
+      .select("type, amount, metadata")
       .eq("workspace_id", workspaceId)
       .eq("type", "consumption")
       .gte("created_at", monthStart)
-      .returns<Array<{ amount: number }>>(),
+      .returns<CreditLedgerRow[]>(),
   ]);
 
   const currentPlanId = subscription.data?.plan_id ?? ctx.workspace.plan_id;
@@ -89,12 +90,18 @@ export default async function BillingSettingsPage() {
     id: row.id,
     type: row.type,
     amount: row.amount,
+    // `amount` is 0 whenever the credits already left the balance at
+    // reservation time, so the row would otherwise read as nothing happened.
+    quantity: ledgerQuantity(row as CreditLedgerRow),
     balanceAfter: row.balance_after,
     referenceType: row.reference_type,
     createdAt: row.created_at,
   }));
 
-  const usedThisMonth = (monthConsumption.data ?? []).reduce((sum, row) => sum + Math.abs(row.amount), 0);
+  // A consumption served from a reservation — and every consumption on an
+  // unlimited account — is recorded with `amount` 0, so the real quantity lives
+  // in the entry metadata. Summing `amount` alone would report no usage at all.
+  const usedThisMonth = (monthConsumption.data ?? []).reduce((sum, row) => sum + ledgerQuantity(row), 0);
 
   return (
     <div className="flex flex-col gap-6">
@@ -109,6 +116,7 @@ export default async function BillingSettingsPage() {
           includedMonthly: currentPlan?.monthly_credits ?? 0,
           lifetimeGranted: account.data?.lifetime_granted ?? 0,
           lifetimeConsumed: account.data?.lifetime_consumed ?? 0,
+          unlimited: account.data?.unlimited === true,
         }}
         realPayments={realPayments}
         canManage={canManage}

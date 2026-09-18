@@ -155,7 +155,7 @@ export class CreditService {
     for (const row of rows) {
       switch (row.type) {
         case "consumption": {
-          const quantity = consumedQuantity(row);
+          const quantity = ledgerQuantity(row);
           consumed += quantity;
           const day = utcDay(row.created_at);
           consumedByDay.set(day, (consumedByDay.get(day) ?? 0) + quantity);
@@ -222,14 +222,27 @@ export function reservationRemaining(reservation: CreditReservationRow): number 
 }
 
 /**
- * Consumed quantity of a consumption row. Prefers the recorded `metadata.quantity`
- * (exact even when served from a reservation); falls back to the signed amount for
- * rows written without it.
+ * How many credits an entry was for.
+ *
+ * The signed `amount` is the effect on the *available* balance, which is 0 in two
+ * common cases: a consumption served from a reservation (the credits left the
+ * balance when they were reserved) and any entry on an unlimited account. Reading
+ * `amount` alone therefore reports zero for most real work. The true figure is
+ * recorded alongside it, with `amount` as the fallback for rows written before
+ * that existed.
  */
-export function consumedQuantity(row: CreditLedgerRow): number {
+export function ledgerQuantity(row: CreditLedgerRow): number {
   const recorded = row.metadata[QUANTITY_METADATA_KEY];
   if (typeof recorded === "number" && Number.isInteger(recorded) && recorded >= 0) return recorded;
   return Math.abs(row.amount);
+}
+
+
+/** Which way an entry moves credits, for display. */
+export function ledgerDirection(type: CreditLedgerType): "in" | "out" | "hold" {
+  if (type === "monthly_grant" || type === "purchase" || type === "refund") return "in";
+  if (type === "reservation") return "hold";
+  return "out";
 }
 
 function buildByDay(consumedByDay: Map<string, number>, fromMs: number, toMs: number): CreditUsage["byDay"] {

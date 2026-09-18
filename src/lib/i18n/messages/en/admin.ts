@@ -70,6 +70,7 @@ export const admin: MessageTree = {
       name: "Workspace",
       plan: "Plan",
       members: "Members",
+      billing: "Billing",
       credits: "Credits",
       reserved: "Reserved",
       consumed: "Lifetime consumed",
@@ -83,6 +84,35 @@ export const admin: MessageTree = {
     emptyHint: "Try a different search term or clear the filter.",
     total: "{{count}} workspace(s)",
     adjustCredits: "Adjust credits",
+    billing: {
+      unlimited: "Not billed",
+      metered: "Billed in credits",
+      notCharged: "No credits charged",
+    },
+  },
+
+  unlimited: {
+    trigger: "Billing",
+    dialogTitleOn: "Stop billing credits for {{workspace}}",
+    dialogTitleOff: "Bill credits for {{workspace}} again",
+    dialogDescriptionOn:
+      "No credits are charged for this workspace's operations and nothing stops for want of credits. The work is still written to the credit ledger with its real quantity.",
+    dialogDescriptionOff:
+      "This workspace is charged against its credit balance again, and operations stop when the balance is short. The existing balance is used as it stands.",
+    scopeTitle: "This setting affects billing only",
+    scopeBody:
+      "Provider quotas, scan coverage and the number of results returned do not change. Usage counters keep showing real quantities.",
+    reason: "Reason",
+    reasonPlaceholderOn: "e.g. internal demo workspace",
+    reasonPlaceholderOff: "e.g. trial ended, back to normal billing",
+    reasonHint: "At least 3 characters. Who changed it and why is written to the billing record.",
+    submitOn: "Stop billing",
+    submitOff: "Resume billing",
+    successOn: "{{workspace}} is no longer billed. Usage is still recorded.",
+    successOff: "{{workspace}} is billed in credits again.",
+    errors: {
+      reason: "The reason must be at least 3 characters.",
+    },
   },
 
   credits: {
@@ -97,6 +127,9 @@ export const admin: MessageTree = {
     reasonPlaceholder: "e.g. goodwill credit for support ticket #482",
     reasonHint: "At least 3 characters. It appears in the audit trail.",
     currentBalance: "Current balance: {{balance}}",
+    unlimitedTitle: "This workspace is not billed",
+    unlimitedBody:
+      "The entry is written to the credit ledger, but billing is off for this workspace so the balance does not move. Resume billing first if the balance should count again.",
     submit: "Write the entry",
     successCredit: "{{amount}} credits granted.",
     successDebit: "{{amount}} credits removed.",

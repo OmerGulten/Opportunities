@@ -49,6 +49,10 @@ export const billing: MessageTree = {
     lifetimeGranted: "Granted in total",
     lifetimeConsumed: "Consumed in total",
     note: "The credit ledger is immutable; the entries below are shown exactly as they were recorded.",
+    unlimitedTitle: "Credit billing is off",
+    unlimitedBody:
+      "This workspace is not billed for credit usage; usage is still recorded, so the consumption figures below are real.",
+    unlimitedRemainingHint: "A remaining balance does not apply to this account.",
   },
   packs: {
     title: "Credit packs",

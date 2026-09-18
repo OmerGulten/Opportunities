@@ -71,6 +71,7 @@ export const admin: MessageTree = {
       name: "Çalışma alanı",
       plan: "Plan",
       members: "Üye",
+      billing: "Faturalama",
       credits: "Kredi",
       reserved: "Rezerve",
       consumed: "Toplam harcanan",
@@ -84,6 +85,35 @@ export const admin: MessageTree = {
     emptyHint: "Arama terimini değiştirin veya filtreyi temizleyin.",
     total: "{{count}} çalışma alanı",
     adjustCredits: "Kredi düzenle",
+    billing: {
+      unlimited: "Faturalanmıyor",
+      metered: "Kredili",
+      notCharged: "Kredi düşülmüyor",
+    },
+  },
+
+  unlimited: {
+    trigger: "Faturalama",
+    dialogTitleOn: "{{workspace}} için kredi faturalamasını kapat",
+    dialogTitleOff: "{{workspace}} için kredi faturalamasını aç",
+    dialogDescriptionOn:
+      "Bu çalışma alanının işlemlerinden kredi düşülmez ve kredi yetersizliği nedeniyle hiçbir işlem durmaz. Yapılan işler gerçek miktarlarıyla kredi defterine yazılmaya devam eder.",
+    dialogDescriptionOff:
+      "Bu çalışma alanı yeniden kredi bakiyesinden düşülerek çalışır; kredi yetersizse işlemler durur. Mevcut bakiye olduğu gibi kullanılır.",
+    scopeTitle: "Bu ayar yalnızca faturalamayı etkiler",
+    scopeBody:
+      "Sağlayıcı kotaları, tarama kapsamı ve dönen sonuç sayısı değişmez. Kullanım sayaçları gerçek miktarları göstermeye devam eder.",
+    reason: "Gerekçe",
+    reasonPlaceholderOn: "Örn. iç kullanım için açılan demo çalışma alanı",
+    reasonPlaceholderOff: "Örn. deneme süresi bitti, normal faturalamaya dönüldü",
+    reasonHint: "En az 3 karakter. Kimin ne gerekçeyle değiştirdiği fatura kaydına yazılır.",
+    submitOn: "Faturalamayı kapat",
+    submitOff: "Faturalamayı aç",
+    successOn: "{{workspace}} artık faturalanmıyor. Kullanım kaydı tutulmaya devam ediyor.",
+    successOff: "{{workspace}} yeniden krediyle faturalanıyor.",
+    errors: {
+      reason: "Gerekçe en az 3 karakter olmalı.",
+    },
   },
 
   credits: {
@@ -99,6 +129,9 @@ export const admin: MessageTree = {
     reasonPlaceholder: "Örn. destek talebi #482 kapsamında telafi",
     reasonHint: "En az 3 karakter. Denetim kaydında görünür.",
     currentBalance: "Mevcut bakiye: {{balance}}",
+    unlimitedTitle: "Bu çalışma alanı faturalanmıyor",
+    unlimitedBody:
+      "Kayıt kredi defterine yazılır, ancak faturalama kapalı olduğu için bakiye değişmez. Bakiyeyi yeniden işletmek için önce faturalamayı açın.",
     submit: "Kaydı oluştur",
     successCredit: "{{amount}} kredi eklendi.",
     successDebit: "{{amount}} kredi düşüldü.",

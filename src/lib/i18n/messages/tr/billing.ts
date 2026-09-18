@@ -49,6 +49,10 @@ export const billing: MessageTree = {
     lifetimeGranted: "Toplam yüklenen",
     lifetimeConsumed: "Toplam harcanan",
     note: "Kredi defteri değiştirilemez; aşağıdaki hareketler kaydedildikleri gibi gösterilir.",
+    unlimitedTitle: "Kredi faturalandırması kapalı",
+    unlimitedBody:
+      "Bu çalışma alanı kredi kullanımı için faturalandırılmıyor; kullanım yine de kaydedilir, bu yüzden aşağıdaki harcama rakamları gerçektir.",
+    unlimitedRemainingHint: "Kalan bakiye bu hesap için geçerli değil.",
   },
   packs: {
     title: "Kredi paketleri",

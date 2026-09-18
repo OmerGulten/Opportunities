@@ -1,16 +1,18 @@
 "use client";
 
+import { cn } from "cn";
 import { Building2, Search, X } from "lucide-react";
 import { parseAsInteger, parseAsString, useQueryState } from "nuqs";
 import { useState, useTransition, type FormEvent } from "react";
 
-import { DataTable, EmptyState, PaginationControls, type DataTableColumn } from "@/components/shared";
+import { DataTable, EmptyState, PaginationControls, toneBadgeClass, type DataTableColumn } from "@/components/shared";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useFormatters, useT } from "@/lib/i18n/client";
 
 import { AdjustCreditsDialog } from "./adjust-credits-dialog";
+import { UnlimitedBillingDialog } from "./unlimited-billing-dialog";
 
 export interface AdminWorkspaceListItem {
   id: string;
@@ -21,6 +23,8 @@ export interface AdminWorkspaceListItem {
   available: number;
   reserved: number;
   lifetimeConsumed: number;
+  /** Billing only: the account records usage but is never charged for it. */
+  unlimited: boolean;
   scans: number;
   businesses: number;
   createdAt: string;
@@ -89,19 +93,33 @@ export function WorkspacesTable({ items, total, page, pageSize, query }: Workspa
     },
     { key: "members", header: t("workspaces.columns.members"), align: "end", cell: (row) => number(row.memberCount) },
     {
+      key: "billing",
+      header: t("workspaces.columns.billing"),
+      cell: (row) => (
+        <Badge variant="outline" className={cn(toneBadgeClass[row.unlimited ? "info" : "neutral"], "text-xs")}>
+          {row.unlimited ? t("workspaces.billing.unlimited") : t("workspaces.billing.metered")}
+        </Badge>
+      ),
+    },
+    {
       key: "credits",
       header: t("workspaces.columns.credits"),
       align: "end",
-      cell: (row) => (
-        <div className="leading-tight">
-          <p className="font-medium tabular-nums">{number(row.available)}</p>
-          {row.reserved > 0 ? (
-            <p className="text-xs text-muted-foreground tabular-nums">
-              {t("workspaces.columns.reserved")}: {number(row.reserved)}
-            </p>
-          ) : null}
-        </div>
-      ),
+      cell: (row) =>
+        // An unlimited account still has a balance row, but nothing is charged
+        // against it, so showing the number would invite the wrong reading.
+        row.unlimited ? (
+          <span className="text-xs text-muted-foreground">{t("workspaces.billing.notCharged")}</span>
+        ) : (
+          <div className="leading-tight">
+            <p className="font-medium tabular-nums">{number(row.available)}</p>
+            {row.reserved > 0 ? (
+              <p className="text-xs text-muted-foreground tabular-nums">
+                {t("workspaces.columns.reserved")}: {number(row.reserved)}
+              </p>
+            ) : null}
+          </div>
+        ),
     },
     { key: "consumed", header: t("workspaces.columns.consumed"), align: "end", cell: (row) => number(row.lifetimeConsumed) },
     { key: "scans", header: t("workspaces.columns.scans"), align: "end", cell: (row) => number(row.scans) },
@@ -115,7 +133,12 @@ export function WorkspacesTable({ items, total, page, pageSize, query }: Workspa
       key: "actions",
       header: <span className="sr-only">{t("workspaces.columns.actions")}</span>,
       align: "end",
-      cell: (row) => <AdjustCreditsDialog workspaceId={row.id} workspaceName={row.name} balance={row.available} />,
+      cell: (row) => (
+        <div className="flex items-center justify-end gap-2">
+          <AdjustCreditsDialog workspaceId={row.id} workspaceName={row.name} balance={row.available} unlimited={row.unlimited} />
+          <UnlimitedBillingDialog workspaceId={row.id} workspaceName={row.name} unlimited={row.unlimited} />
+        </div>
+      ),
     },
   ];
 

@@ -35,6 +35,6 @@ export {
   type ScanEstimateInput,
   type ScanEstimateLine,
 } from "./pricing";
-export { consumedQuantity, CreditService, QUANTITY_METADATA_KEY, reservationRemaining } from "./service";
+export { ledgerQuantity, CreditService, QUANTITY_METADATA_KEY, reservationRemaining } from "./service";
 export { createMemoryCreditStore, type MemoryCreditStore, type MemoryCreditStoreOptions, type MemoryCreditStoreSnapshot } from "./store.memory";
 export { createSupabaseCreditStore, mapCreditRpcError } from "./store.supabase";

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { creditKeys, REFERENCE_TYPES } from "@/lib/credits/keys";
 import { buildPricingTable, estimateBusinessCount, estimateScanCredits, perBusinessCost } from "@/lib/credits/pricing";
-import { CreditService, consumedQuantity } from "@/lib/credits/service";
+import { CreditService, ledgerQuantity } from "@/lib/credits/service";
 import { createMemoryCreditStore } from "@/lib/credits/store.memory";
 import { InsufficientCreditsError } from "@/lib/errors";
 import { buildCoveragePlan } from "@/lib/providers/places/coverage";
@@ -204,7 +204,7 @@ describe("running a scan against the ledger", () => {
     expect(entry.reserved_after).toBe(57);
     // Anything reporting "credits used" must read the quantity, not the amount,
     // or it will report zero for every scan.
-    expect(consumedQuantity(entry)).toBe(3);
+    expect(ledgerQuantity(entry)).toBe(3);
   });
 
   it("reports what the scan actually used", async () => {

@@ -29,7 +29,16 @@ export default async function DashboardPage() {
   const t = getT(ctx.locale, "dashboard");
   const tc = getT(ctx.locale, "common");
 
-  const [summary, dueLeads, scans] = await Promise.all([getDashboardSummary(ctx), listDueFollowUps(ctx, 6), listScans(ctx, { limit: 5 })]);
+  // The summary reports the balance; whether the workspace is billed at all is a
+  // property of its credit account. An unlimited account keeps a balance of 0, so
+  // the figure is replaced rather than shown as an empty account.
+  const [summary, dueLeads, scans, creditAccount] = await Promise.all([
+    getDashboardSummary(ctx),
+    listDueFollowUps(ctx, 6),
+    listScans(ctx, { limit: 5 }),
+    ctx.supabase.from("credit_accounts").select("unlimited").eq("workspace_id", ctx.workspace.id).maybeSingle<{ unlimited: boolean }>(),
+  ]);
+  const unlimitedCredits = creditAccount.data?.unlimited === true;
   const providers = getProviderStatus();
   const numbers = new Intl.NumberFormat(ctx.locale === "en" ? "en-GB" : "tr-TR");
   const money = new Intl.NumberFormat(ctx.locale === "en" ? "en-GB" : "tr-TR", {
@@ -77,7 +86,7 @@ export default async function DashboardPage() {
 
         <Card size="sm">
           <CardContent className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <Kpi label={t("credits.available")} value={numbers.format(summary.credits.available)} />
+            <Kpi label={t("credits.available")} value={unlimitedCredits ? tc("credits.unlimited") : numbers.format(summary.credits.available)} />
             <Kpi label={t("credits.reserved")} value={numbers.format(summary.credits.reserved)} />
             <Kpi label={t("credits.used")} value={numbers.format(summary.credits.usedThisMonth)} />
             <Kpi label={t("credits.granted")} value={numbers.format(summary.credits.grantedThisMonth)} />
@@ -141,10 +150,10 @@ export default async function DashboardPage() {
         />
         <StatCard
           label={t("kpi.credits")}
-          value={numbers.format(summary.credits.available)}
+          value={unlimitedCredits ? tc("credits.unlimited") : numbers.format(summary.credits.available)}
           description={t("kpi.creditsUsed", { count: numbers.format(summary.credits.usedThisMonth) })}
           icon={<Coins className="size-4" />}
-          footer={t("kpi.creditsReserved", { count: numbers.format(summary.credits.reserved) })}
+          footer={unlimitedCredits ? tc("credits.notBilled") : t("kpi.creditsReserved", { count: numbers.format(summary.credits.reserved) })}
         />
         <StatCard
           label={t("kpi.activeScans")}

@@ -30,9 +30,14 @@ export interface CreditEstimatePanelProps {
  * Coverage and credit estimate. Numbers are what the server planner and the
  * pricing table produced — the panel never extrapolates beyond them, and it
  * says plainly when the balance is short.
+ *
+ * An unlimited account is never billed, so the balance and the shortfall are
+ * not shown for it. The estimated cost still is: it is what the scan would
+ * cost, and it stays useful as a measure of the work being asked for.
  */
 export function CreditEstimatePanel({ estimate, status, errorCode, variant = "compact", className }: CreditEstimatePanelProps) {
   const t = useT("scans");
+  const tc = useT("common");
   const te = useT("errors");
   const { number } = useFormatters();
 
@@ -63,6 +68,7 @@ export function CreditEstimatePanel({ estimate, status, errorCode, variant = "co
     );
   }
 
+  const unlimited = estimate.balance.unlimited;
   const remaining = estimate.balance.available - estimate.total;
 
   return (
@@ -146,18 +152,30 @@ export function CreditEstimatePanel({ estimate, status, errorCode, variant = "co
 
       <Separator />
 
-      <dl className="flex flex-col gap-1 text-sm">
-        <div className="flex items-baseline justify-between gap-2">
-          <dt className="text-muted-foreground">{t("estimate.balance")}</dt>
-          <dd className="tabular-nums">{number(estimate.balance.available)}</dd>
+      {unlimited ? (
+        <div className="flex flex-col gap-1.5">
+          <dl className="flex flex-col gap-1 text-sm">
+            <div className="flex items-baseline justify-between gap-2">
+              <dt className="text-muted-foreground">{t("estimate.balance")}</dt>
+              <dd className="font-medium">{tc("credits.unlimited")}</dd>
+            </div>
+          </dl>
+          <p className="text-xs text-muted-foreground">{tc("credits.scanNotCharged")}</p>
         </div>
-        <div className="flex items-baseline justify-between gap-2">
-          <dt className="text-muted-foreground">{t("estimate.afterScan")}</dt>
-          <dd className={cn("font-medium tabular-nums", !estimate.sufficient && "text-destructive")}>{number(remaining)}</dd>
-        </div>
-      </dl>
+      ) : (
+        <dl className="flex flex-col gap-1 text-sm">
+          <div className="flex items-baseline justify-between gap-2">
+            <dt className="text-muted-foreground">{t("estimate.balance")}</dt>
+            <dd className="tabular-nums">{number(estimate.balance.available)}</dd>
+          </div>
+          <div className="flex items-baseline justify-between gap-2">
+            <dt className="text-muted-foreground">{t("estimate.afterScan")}</dt>
+            <dd className={cn("font-medium tabular-nums", !estimate.sufficient && "text-destructive")}>{number(remaining)}</dd>
+          </div>
+        </dl>
+      )}
 
-      {!estimate.sufficient ? (
+      {!unlimited && !estimate.sufficient ? (
         <InlineAlert
           tone="negative"
           icon={<TriangleAlert className="size-4" />}

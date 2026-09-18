@@ -48,6 +48,11 @@ export interface CreditSummary {
   includedMonthly: number;
   lifetimeGranted: number;
   lifetimeConsumed: number;
+  /**
+   * The workspace is never billed for credits. `available` stays at 0 for such
+   * an account, so it is not a figure to show; consumption figures stay real.
+   */
+  unlimited: boolean;
 }
 
 export interface BillingPanelProps {
@@ -68,6 +73,7 @@ export interface BillingPanelProps {
  */
 export function BillingPanel({ plans, subscription, credits, packs, realPayments, canManage }: BillingPanelProps) {
   const t = useT("billing");
+  const tc = useT("common");
   const { number, currency: formatCurrency, date } = useFormatters();
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -139,14 +145,20 @@ export function BillingPanel({ plans, subscription, credits, packs, realPayments
           <CardDescription>{t("credits.description")}</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
+          {credits.unlimited ? (
+            <InlineAlert tone="info" title={t("credits.unlimitedTitle")}>
+              {t("credits.unlimitedBody")}
+            </InlineAlert>
+          ) : null}
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard label={t("credits.included")} value={number(credits.includedMonthly)} icon={<Coins className="size-4" />} />
             <StatCard label={t("credits.used")} value={number(credits.usedThisMonth)} icon={<CreditCard className="size-4" />} />
             <StatCard
               label={t("credits.remaining")}
-              value={number(credits.available)}
+              value={credits.unlimited ? tc("credits.unlimited") : number(credits.available)}
+              description={credits.unlimited ? t("credits.unlimitedRemainingHint") : undefined}
               icon={<Wallet className="size-4" />}
-              tone={credits.available > 0 ? "positive" : "attention"}
+              tone={credits.unlimited || credits.available > 0 ? "positive" : "attention"}
             />
             <StatCard label={t("credits.reserved")} value={number(credits.reserved)} description={t("credits.reservedHint")} icon={<Coins className="size-4" />} />
           </div>
@@ -227,6 +239,8 @@ export function BillingPanel({ plans, subscription, credits, packs, realPayments
         </CardContent>
       </Card>
 
+      {/* Topping up an account that is never billed would achieve nothing. */}
+      {credits.unlimited ? null : (
       <Card>
         <CardHeader>
           <CardTitle>{t("packs.title")}</CardTitle>
@@ -252,6 +266,7 @@ export function BillingPanel({ plans, subscription, credits, packs, realPayments
           {realPayments ? null : <p className="text-xs text-muted-foreground">{t("packs.mockNote")}</p>}
         </CardContent>
       </Card>
+      )}
 
       {subscription && canManage && !subscription.cancelAtPeriodEnd && subscription.status !== "cancelled" ? (
         <Card>

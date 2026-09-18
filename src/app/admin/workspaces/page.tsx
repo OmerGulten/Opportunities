@@ -60,6 +60,7 @@ export default async function AdminWorkspacesPage({ searchParams }: { searchPara
     available: item.credits.available,
     reserved: item.credits.reserved,
     lifetimeConsumed: item.credits.lifetimeConsumed,
+    unlimited: item.credits.unlimited,
     scans: item.scans,
     businesses: item.businesses,
     createdAt: item.workspace.created_at,

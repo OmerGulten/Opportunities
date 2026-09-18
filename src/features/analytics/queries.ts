@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { WorkspaceContext } from "@/lib/auth/context";
-import { consumedQuantity } from "@/lib/credits/service";
+import { ledgerQuantity } from "@/lib/credits/service";
 import { getScanSettings } from "@/lib/db/settings";
 import { toAppError } from "@/lib/errors";
 import type { Locale } from "@/types/common";
@@ -99,7 +99,7 @@ export async function getDashboardSummary(ctx: WorkspaceContext): Promise<Dashbo
   // Consumption served from a reservation has amount 0 (the credits already left
   // the available balance when they were reserved), so the real quantity lives in
   // the entry metadata. Summing amount alone would report zero usage.
-  const usedThisMonth = (ledger.data ?? []).filter((row) => row.type === "consumption").reduce((sum, row) => sum + consumedQuantity(row), 0);
+  const usedThisMonth = (ledger.data ?? []).filter((row) => row.type === "consumption").reduce((sum, row) => sum + ledgerQuantity(row), 0);
   const grantedThisMonth = (ledger.data ?? [])
     .filter((row) => row.type === "monthly_grant" || row.type === "purchase")
     .reduce((sum, row) => sum + Math.abs(row.amount), 0);
@@ -236,7 +236,7 @@ export async function getAnalytics(ctx: WorkspaceContext, filters: AnalyticsFilt
   for (const entry of ledger) {
     if (entry.type !== "consumption") continue;
     const day = entry.created_at.slice(0, 10);
-    consumedByDay.set(day, (consumedByDay.get(day) ?? 0) + consumedQuantity(entry));
+    consumedByDay.set(day, (consumedByDay.get(day) ?? 0) + ledgerQuantity(entry));
   }
 
   const websiteGaps = countGaps(gapCounts, ["no_website", "weak_website", "no_https", "slow_mobile"]);
@@ -288,7 +288,7 @@ export async function getAnalytics(ctx: WorkspaceContext, filters: AnalyticsFilt
       currency: leads[0]?.currency ?? "TRY",
     },
     credits: {
-      consumed: ledger.filter((entry) => entry.type === "consumption").reduce((sum, entry) => sum + consumedQuantity(entry), 0),
+      consumed: ledger.filter((entry) => entry.type === "consumption").reduce((sum, entry) => sum + ledgerQuantity(entry), 0),
       granted: ledger.filter((entry) => entry.type === "monthly_grant" || entry.type === "purchase").reduce((sum, entry) => sum + Math.abs(entry.amount), 0),
       refunded: ledger.filter((entry) => entry.type === "refund").reduce((sum, entry) => sum + Math.abs(entry.amount), 0),
       byDay: [...consumedByDay.entries()].map(([date, consumed]) => ({ date, consumed })).sort((a, b) => a.date.localeCompare(b.date)),

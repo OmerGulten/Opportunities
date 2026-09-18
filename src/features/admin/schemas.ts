@@ -12,6 +12,20 @@ export const grantCreditsSchema = z.object({
 
 export type GrantCreditsRequest = z.infer<typeof grantCreditsSchema>;
 
+/**
+ * Marks a workspace's credit account as not billed (or bills it again).
+ *
+ * The reason is required in both directions: free usage should never be an
+ * unexplained click, and turning billing back on is just as worth recording.
+ */
+export const setUnlimitedSchema = z.object({
+  workspaceId: z.uuid(),
+  unlimited: z.boolean(),
+  reason: z.string().trim().min(3).max(300),
+});
+
+export type SetUnlimitedRequest = z.infer<typeof setUnlimitedSchema>;
+
 export const updatePricingSchema = z.object({
   rules: z
     .array(

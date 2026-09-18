@@ -123,6 +123,11 @@ export const common: MessageTree = {
     reviews: "reviews",
     photos: "photos",
   },
+  credits: {
+    unlimited: "Unlimited",
+    notBilled: "This workspace is not billed for credit usage.",
+    scanNotCharged: "No credits will be charged for this scan; the cost above is shown for information only.",
+  },
   demo: {
     badge: "Demo data",
     description: "Provider credentials are not configured. Fictional demo data is shown.",

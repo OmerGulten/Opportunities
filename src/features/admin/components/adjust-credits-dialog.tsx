@@ -35,6 +35,8 @@ export interface AdjustCreditsDialogProps {
   workspaceName: string;
   /** Current available balance, shown so the operator adjusts against a real number. */
   balance: number;
+  /** The account is not billed: the entry is still written, but no balance moves. */
+  unlimited?: boolean;
 }
 
 /**
@@ -44,7 +46,7 @@ export interface AdjustCreditsDialogProps {
  * entry, so an adjustment is always attributable. Validation is mirrored here
  * only to give immediate feedback; the server re-validates everything.
  */
-export function AdjustCreditsDialog({ workspaceId, workspaceName, balance }: AdjustCreditsDialogProps) {
+export function AdjustCreditsDialog({ workspaceId, workspaceName, balance, unlimited = false }: AdjustCreditsDialogProps) {
   const t = useT("admin");
   const tc = useT("common");
   const { number } = useFormatters();
@@ -119,6 +121,12 @@ export function AdjustCreditsDialog({ workspaceId, workspaceName, balance }: Adj
 
         <form id={`adjust-credits-${workspaceId}`} onSubmit={handleSubmit}>
           <FieldGroup>
+            {unlimited ? (
+              <InlineAlert tone="neutral" title={t("credits.unlimitedTitle")}>
+                {t("credits.unlimitedBody")}
+              </InlineAlert>
+            ) : null}
+
             <Field>
               <FieldLabel htmlFor={`direction-${workspaceId}`}>{t("credits.direction")}</FieldLabel>
               <Select

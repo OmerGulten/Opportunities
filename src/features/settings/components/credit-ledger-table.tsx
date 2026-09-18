@@ -10,7 +10,10 @@ import { useFormatters, useT } from "@/lib/i18n/client";
 export interface CreditLedgerEntry {
   id: string;
   type: string;
+  /** Effect on the available balance. 0 for a reservation-served consumption. */
   amount: number;
+  /** Credits the entry was actually for. This is the figure worth showing. */
+  quantity: number;
   balanceAfter: number;
   referenceType: string | null;
   createdAt: string;
@@ -29,6 +32,7 @@ interface LedgerApiRow {
   balance_after: number;
   reference_type: string | null;
   created_at: string;
+  metadata?: Record<string, unknown> | null;
 }
 
 function toEntry(row: LedgerApiRow): CreditLedgerEntry {
@@ -36,11 +40,25 @@ function toEntry(row: LedgerApiRow): CreditLedgerEntry {
     id: row.id,
     type: row.type,
     amount: row.amount,
+    quantity: quantityOf(row),
     balanceAfter: row.balance_after,
     referenceType: row.reference_type,
     createdAt: row.created_at,
   };
 }
+
+/**
+ * Mirrors ledgerQuantity() on the server: the signed amount is 0 whenever the
+ * credits already left the balance at reservation time, so the recorded
+ * quantity is what the row was really for.
+ */
+function quantityOf(row: LedgerApiRow): number {
+  const recorded = row.metadata?.quantity;
+  if (typeof recorded === "number" && Number.isInteger(recorded) && recorded >= 0) return recorded;
+  return Math.abs(row.amount);
+}
+
+const INBOUND_TYPES = new Set(["monthly_grant", "purchase", "refund"]);
 
 const KNOWN_TYPES = new Set([
   "monthly_grant",
@@ -106,19 +124,22 @@ export function CreditLedgerTable({ initialItems, initialTotal, pageSize }: Cred
       key: "amount",
       header: t("ledger.columns.amount"),
       align: "end",
-      cell: (entry) => (
-        <span
-          className={
-            entry.amount > 0
-              ? "font-medium text-emerald-600 tabular-nums dark:text-emerald-400"
-              : entry.amount < 0
-                ? "font-medium text-foreground tabular-nums"
-                : "tabular-nums"
-          }
-        >
-          {entry.amount > 0 ? `+${number(entry.amount)}` : number(entry.amount)}
-        </span>
-      ),
+      cell: (entry) => {
+        const inbound = INBOUND_TYPES.has(entry.type);
+        return (
+          <span
+            className={
+              entry.quantity === 0
+                ? "tabular-nums text-muted-foreground"
+                : inbound
+                  ? "font-medium text-emerald-600 tabular-nums dark:text-emerald-400"
+                  : "font-medium text-foreground tabular-nums"
+            }
+          >
+            {entry.quantity === 0 ? number(0) : `${inbound ? "+" : "-"}${number(entry.quantity)}`}
+          </span>
+        );
+      },
     },
     {
       key: "balance",

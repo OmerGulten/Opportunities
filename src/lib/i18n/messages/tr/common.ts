@@ -123,6 +123,11 @@ export const common: MessageTree = {
     reviews: "yorum",
     photos: "fotoğraf",
   },
+  credits: {
+    unlimited: "Sınırsız",
+    notBilled: "Bu çalışma alanı kredi kullanımı için faturalandırılmıyor.",
+    scanNotCharged: "Bu tarama için kredi düşülmeyecek; yukarıdaki maliyet yalnızca bilgi amaçlıdır.",
+  },
   demo: {
     badge: "Demo veri",
     description: "Sağlayıcı kimlik bilgileri tanımlı değil. Kurgusal demo verisi gösteriliyor.",

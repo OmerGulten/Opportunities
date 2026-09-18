@@ -4,15 +4,15 @@ import { randomUUID } from "node:crypto";
 
 import type { AuthContext } from "@/lib/auth/context";
 import { creditKeys, REFERENCE_TYPES } from "@/lib/credits/keys";
-import { consumedQuantity } from "@/lib/credits/service";
+import { ledgerQuantity } from "@/lib/credits/service";
 import { getCreditService } from "@/lib/credits/server";
 import { getFeatureFlags, invalidateSettingsCache, setSystemSetting } from "@/lib/db/settings";
 import { NotFoundError, toAppError } from "@/lib/errors";
 import { logger } from "@/lib/logging";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { CreditLedgerRow, ScanJobRow, ServiceRow, ServiceRuleRow, WorkspaceRow } from "@/types/db";
+import type { CreditAccountRow, CreditLedgerRow, ScanJobRow, ServiceRow, ServiceRuleRow, WorkspaceRow } from "@/types/db";
 
-import type { GrantCreditsRequest, ListFailedJobsQuery, ListWorkspacesQuery, ToggleServiceRequest, UpdateFeatureFlagsRequest, UpdatePricingRequest, UpdateServiceRuleRequest } from "./schemas";
+import type { GrantCreditsRequest, ListFailedJobsQuery, ListWorkspacesQuery, SetUnlimitedRequest, ToggleServiceRequest, UpdateFeatureFlagsRequest, UpdatePricingRequest, UpdateServiceRuleRequest } from "./schemas";
 
 /**
  * Platform administration.
@@ -27,7 +27,8 @@ import type { GrantCreditsRequest, ListFailedJobsQuery, ListWorkspacesQuery, Tog
 export interface AdminWorkspaceRow {
   workspace: WorkspaceRow;
   memberCount: number;
-  credits: { available: number; reserved: number; lifetimeConsumed: number };
+  /** `unlimited` accounts still record real usage; only the balance stops being charged. */
+  credits: { available: number; reserved: number; lifetimeConsumed: number; unlimited: boolean };
   scans: number;
   businesses: number;
   planKey: string | null;
@@ -53,9 +54,9 @@ export async function listWorkspaces(_ctx: AuthContext, query: ListWorkspacesQue
         client.from("workspace_members").select("id", { count: "exact", head: true }).eq("workspace_id", workspace.id),
         client
           .from("credit_accounts")
-          .select("balance, reserved, lifetime_consumed")
+          .select("balance, reserved, lifetime_consumed, unlimited")
           .eq("workspace_id", workspace.id)
-          .maybeSingle<{ balance: number; reserved: number; lifetime_consumed: number }>(),
+          .maybeSingle<{ balance: number; reserved: number; lifetime_consumed: number; unlimited: boolean }>(),
         client.from("scans").select("id", { count: "exact", head: true }).eq("workspace_id", workspace.id),
         client.from("businesses").select("id", { count: "exact", head: true }).eq("workspace_id", workspace.id),
       ]);
@@ -66,6 +67,7 @@ export async function listWorkspaces(_ctx: AuthContext, query: ListWorkspacesQue
           available: account.data?.balance ?? 0,
           reserved: account.data?.reserved ?? 0,
           lifetimeConsumed: account.data?.lifetime_consumed ?? 0,
+          unlimited: account.data?.unlimited ?? false,
         },
         scans: scans.count ?? 0,
         businesses: businesses.count ?? 0,
@@ -105,6 +107,49 @@ export async function adjustCredits(ctx: AuthContext, request: GrantCreditsReque
     adjustmentId,
   });
   return entry;
+}
+
+/**
+ * Marks a workspace's credit account as not billed, or bills it again.
+ *
+ * "Unlimited" is a billing switch and nothing else: operations keep going
+ * through the ledger with their real quantity, so usage reporting is unchanged —
+ * the balance simply stops being charged and no operation fails for want of
+ * credits. Nothing here touches provider quotas or how many results a scan
+ * returns.
+ *
+ * The upsert creates the account when a workspace has never had one, and the
+ * `billing_events` row records who granted the free usage and why, so it can
+ * never happen silently.
+ */
+export async function setWorkspaceUnlimited(ctx: AuthContext, request: SetUnlimitedRequest): Promise<CreditAccountRow> {
+  const client = createAdminClient();
+  const { data: workspace } = await client.from("workspaces").select("id").eq("id", request.workspaceId).maybeSingle<{ id: string }>();
+  if (!workspace) throw new NotFoundError("Workspace not found");
+
+  const { data, error } = await client
+    .from("credit_accounts")
+    // Only the two columns below are written, so an existing balance is left alone.
+    .upsert({ workspace_id: request.workspaceId, unlimited: request.unlimited }, { onConflict: "workspace_id" })
+    .select("*")
+    .single<CreditAccountRow>();
+  if (error || !data) throw toAppError(error ?? new Error("Credit account could not be updated"));
+
+  const { error: eventError } = await client.from("billing_events").insert({
+    workspace_id: request.workspaceId,
+    provider: "internal",
+    event_type: "unlimited_updated",
+    payload: { unlimited: request.unlimited, reason: request.reason, actor: ctx.user.id },
+    processed_at: new Date().toISOString(),
+  });
+  if (eventError) throw toAppError(eventError);
+
+  logger.info("admin_unlimited_updated", {
+    workspaceId: request.workspaceId,
+    unlimited: request.unlimited,
+    actor: ctx.user.id,
+  });
+  return data;
 }
 
 export async function updateCreditPricing(ctx: AuthContext, request: UpdatePricingRequest): Promise<void> {
@@ -208,7 +253,7 @@ export async function getPlatformUsage(_ctx: AuthContext, sinceDays = 30): Promi
     credits: {
       granted: entries.filter((row) => row.type === "monthly_grant" || row.type === "purchase").reduce((sum, row) => sum + Math.abs(row.amount), 0),
       // Reservation-backed consumption carries amount 0; the quantity is in metadata.
-      consumed: entries.filter((row) => row.type === "consumption").reduce((sum, row) => sum + consumedQuantity(row), 0),
+      consumed: entries.filter((row) => row.type === "consumption").reduce((sum, row) => sum + ledgerQuantity(row), 0),
       refunded: entries.filter((row) => row.type === "refund").reduce((sum, row) => sum + Math.abs(row.amount), 0),
     },
   };
