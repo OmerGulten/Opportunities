@@ -184,8 +184,9 @@ export async function cancelScan(ctx: WorkspaceContext, scanId: string): Promise
   }
 
   // Release the reservation now rather than waiting for the workflow to notice
-  // the cancellation. The fixed idempotency key makes this safe even if the
-  // workflow's own finalize step also runs.
+  // the cancellation. If the release cannot be completed, surface the failure
+  // instead of silently leaving credits stranded; the user can retry cancellation
+  // after the provider/database issue is resolved.
   if (isAdminClientConfigured()) {
     try {
       const release = await getCreditService().releaseReservation({
@@ -195,13 +196,12 @@ export async function cancelScan(ctx: WorkspaceContext, scanId: string): Promise
         idempotencyKey: creditKeys.scanRelease(scanId),
         actorId: ctx.user.id,
       });
-      // Assigned, not accumulated: the workflow's finalize step releases the
-      // same reservation and would otherwise double-count the refund.
       if (release.refunded > 0) {
         await ctx.supabase.from("scans").update({ refunded_credits: release.refunded }).eq("id", scanId);
       }
     } catch (err) {
-      logger.warn("scan_reservation_release_failed", { scanId, error: err instanceof Error ? err.message : String(err) });
+      logger.error("scan_reservation_release_failed", { scanId, error: err instanceof Error ? err.message : String(err) });
+      throw toAppError(err, "Could not release reserved credits");
     }
   }
 
