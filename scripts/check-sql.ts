@@ -163,7 +163,7 @@ function main(): void {
   }
 
   // ---- indexes ---------------------------------------------------------
-  for (const m of combined.matchAll(/create\s+(?:unique\s+)?index\s+(?:concurrently\s+)?(?:if\s+not\s+exists\s+)?([a-z_][a-z0-9_]*)\s+on\s+(?:public\.)?([a-z_][a-z0-9_]*)\s*\(([^;]*?)\)\s*(?:where[^;]*)?;/gis)) {
+  for (const m of combined.matchAll(/create\s+(?:unique\s+)?index\s+(?:concurrently\s+)?(?:if\s+not\s+exists\s+)?([a-z_][a-z0-9_]*)\s+on\s+(?:public\.)?([a-z_][a-z0-9_]*)\s*\(([^;]*?)\)\s*(?:where[^;]*)?;/gi)) {
     const [, indexName, tableName, columnList] = m;
     const table = tables.get(tableName);
     if (!table) {

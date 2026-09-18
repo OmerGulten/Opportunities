@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import type { Json } from "@/types/common";
 import type { RuleOperator } from "@/types/scoring";
 
 import { coerceBoolean, coerceNumber, evaluateOperator, isRuleOperator, looseEquals, RULE_OPERATORS } from "./operators";
@@ -197,6 +198,7 @@ describe("evaluateOperator", () => {
       expect(() => evaluateOperator(operator, circular, { a: 1 })).not.toThrow();
       expect(() => evaluateOperator(operator, "x", undefined as unknown as null)).not.toThrow();
     }
-    expect(evaluateOperator("eq", circular, circular)).toBe(false);
+    // A self-referencing object is not valid Json; the cast is the point of the test.
+    expect(evaluateOperator("eq", circular, circular as unknown as Json)).toBe(false);
   });
 });
