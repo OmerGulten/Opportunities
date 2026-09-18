@@ -52,7 +52,7 @@ export interface AuditBusinessResult {
  * is idempotent through `scan_jobs.idempotency_key` and the per-business credit
  * key, so a replay after a crash neither double-charges nor double-writes.
  */
-export async function auditAndScoreBusiness(scanId: string, businessId: string): Promise<AuditBusinessResult> {
+export async function auditAndScoreBusiness(scanId: string, businessId: string, runKey?: string): Promise<AuditBusinessResult> {
   "use step";
 
   const client = adminClient();
@@ -60,7 +60,9 @@ export async function auditAndScoreBusiness(scanId: string, businessId: string):
   if (await isScanCancelled(client, scanId)) return skipped;
 
   const scan = await loadScan(client, scanId);
-  const idempotencyKey = `scan:${scanId}:audit:${businessId}`;
+  // A manual refresh passes its own run key so it is not mistaken for the
+  // original scan's already-completed job (and is billed as its own audit).
+  const idempotencyKey = runKey ? `scan:${scanId}:audit:${businessId}:${runKey}` : `scan:${scanId}:audit:${businessId}`;
   const job = await claimScanJob(client, { scanId, workspaceId: scan.workspace_id, jobType: "audit", idempotencyKey, businessId });
   if (!job.claimed) return skipped;
 
@@ -85,7 +87,7 @@ export async function auditAndScoreBusiness(scanId: string, businessId: string):
     // does not pay to audit businesses the user already excluded.
     if (!passesPreAuditFilters(details, filters, scan.audit_depth)) {
       const cost = pricing.discovery;
-      await consumeCredits(scan, businessId, cost);
+      await consumeCredits(scan, businessId, cost, runKey);
       await client
         .from("scan_businesses")
         .update({ audit_status: "skipped", opportunity_status: "skipped" })
@@ -130,7 +132,7 @@ export async function auditAndScoreBusiness(scanId: string, businessId: string):
       .eq("business_id", businessId);
 
     const cost = perBusinessCost(scan.audit_depth, pricing);
-    await consumeCredits(scan, businessId, cost);
+    await consumeCredits(scan, businessId, cost, runKey);
     await bumpScanCounters(client, scanId, { scored: 1, consumed: cost });
     await finishScanJob(client, job.jobId, "completed");
 
@@ -387,14 +389,16 @@ async function persistOpportunity(
   return opportunity.id;
 }
 
-async function consumeCredits(scan: ScanRow, businessId: string, amount: number): Promise<void> {
+async function consumeCredits(scan: ScanRow, businessId: string, amount: number, runKey?: string): Promise<void> {
   if (amount <= 0) return;
+  const base = creditKeys.scanBusiness(scan.id, businessId);
   await getCreditService().consume({
     workspaceId: scan.workspace_id,
     amount,
     referenceType: REFERENCE_TYPES.scan,
     referenceId: scan.id,
-    idempotencyKey: creditKeys.scanBusiness(scan.id, businessId),
-    metadata: { businessId, depth: scan.audit_depth },
+    // A refresh is a separate audit and is billed separately from the scan run.
+    idempotencyKey: runKey ? base + ":" + runKey : base,
+    metadata: { businessId, depth: scan.audit_depth, refresh: runKey ?? null },
   });
 }
