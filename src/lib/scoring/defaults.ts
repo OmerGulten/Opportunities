@@ -149,7 +149,14 @@ export function loadDefaultRules(serviceKeyToId: Record<string, string> = {}): {
     const serviceId = idByKey.get(seed.serviceKey);
     if (!serviceId) continue;
     const { serviceKey, ...rest } = seed;
-    rules.push({ ...rest, id: defaultRuleId(serviceKey, seed.key), serviceId });
+    rules.push({
+      ...rest,
+      // `value` may be an array or object; deep-copy it so a caller mutating a
+      // returned rule cannot corrupt the module-level seed for later calls.
+      value: rest.value !== null && typeof rest.value === "object" ? (structuredClone(rest.value) as ServiceRule["value"]) : rest.value,
+      id: defaultRuleId(serviceKey, seed.key),
+      serviceId,
+    });
   }
 
   return { services, rules };
