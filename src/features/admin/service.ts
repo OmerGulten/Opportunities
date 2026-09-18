@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 
 import type { AuthContext } from "@/lib/auth/context";
 import { creditKeys, REFERENCE_TYPES } from "@/lib/credits/keys";
+import { consumedQuantity } from "@/lib/credits/service";
 import { getCreditService } from "@/lib/credits/server";
 import { getFeatureFlags, invalidateSettingsCache, setSystemSetting } from "@/lib/db/settings";
 import { NotFoundError, toAppError } from "@/lib/errors";
@@ -185,7 +186,7 @@ export async function getPlatformUsage(_ctx: AuthContext, sinceDays = 30): Promi
     client.from("opportunities").select("id", { count: "exact", head: true }),
     client.from("provider_call_logs").select("success, estimated_cost").gte("created_at", since).returns<Array<{ success: boolean; estimated_cost: number }>>(),
     client.from("message_generations").select("status").gte("created_at", since).returns<Array<{ status: string }>>(),
-    client.from("credit_ledger").select("type, amount").gte("created_at", since).returns<Array<{ type: string; amount: number }>>(),
+    client.from("credit_ledger").select("type, amount, metadata").gte("created_at", since).returns<CreditLedgerRow[]>(),
   ]);
 
   const calls = providerCalls.data ?? [];
@@ -206,7 +207,8 @@ export async function getPlatformUsage(_ctx: AuthContext, sinceDays = 30): Promi
     aiGenerations: { total: generations.length, failed: generations.filter((row) => row.status !== "success").length },
     credits: {
       granted: entries.filter((row) => row.type === "monthly_grant" || row.type === "purchase").reduce((sum, row) => sum + Math.abs(row.amount), 0),
-      consumed: entries.filter((row) => row.type === "consumption").reduce((sum, row) => sum + Math.abs(row.amount), 0),
+      // Reservation-backed consumption carries amount 0; the quantity is in metadata.
+      consumed: entries.filter((row) => row.type === "consumption").reduce((sum, row) => sum + consumedQuantity(row), 0),
       refunded: entries.filter((row) => row.type === "refund").reduce((sum, row) => sum + Math.abs(row.amount), 0),
     },
   };

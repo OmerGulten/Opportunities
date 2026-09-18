@@ -1,10 +1,11 @@
 import "server-only";
 
 import type { WorkspaceContext } from "@/lib/auth/context";
+import { consumedQuantity } from "@/lib/credits/service";
 import { getScanSettings } from "@/lib/db/settings";
 import { toAppError } from "@/lib/errors";
 import type { Locale } from "@/types/common";
-import type { LeadRow, PipelineStageRow, ServiceRow } from "@/types/db";
+import type { CreditLedgerRow, LeadRow, PipelineStageRow, ServiceRow } from "@/types/db";
 
 /**
  * Dashboard and analytics reads.
@@ -85,17 +86,20 @@ export async function getDashboardSummary(ctx: WorkspaceContext): Promise<Dashbo
     countRows(ctx, "messages", (q) => q.eq("workspace_id", workspaceId).not("channel_opened_at", "is", null)),
     ctx.supabase
       .from("credit_ledger")
-      .select("type, amount")
+      .select("type, amount, metadata")
       .eq("workspace_id", workspaceId)
       .gte("created_at", monthStart)
-      .returns<Array<{ type: string; amount: number }>>(),
+      .returns<CreditLedgerRow[]>(),
   ]);
 
   const leadRows = leads.data ?? [];
   const stageRows = stages.data ?? [];
   const serviceRows = services.data ?? [];
 
-  const usedThisMonth = (ledger.data ?? []).filter((row) => row.type === "consumption").reduce((sum, row) => sum + Math.abs(row.amount), 0);
+  // Consumption served from a reservation has amount 0 (the credits already left
+  // the available balance when they were reserved), so the real quantity lives in
+  // the entry metadata. Summing amount alone would report zero usage.
+  const usedThisMonth = (ledger.data ?? []).filter((row) => row.type === "consumption").reduce((sum, row) => sum + consumedQuantity(row), 0);
   const grantedThisMonth = (ledger.data ?? [])
     .filter((row) => row.type === "monthly_grant" || row.type === "purchase")
     .reduce((sum, row) => sum + Math.abs(row.amount), 0);
@@ -195,11 +199,11 @@ export async function getAnalytics(ctx: WorkspaceContext, filters: AnalyticsFilt
       .returns<Array<{ id: string; status: string; won_value: number | null; currency: string; created_at: string; stage_id: string; pipeline_stages: { key: string } | null }>>(),
     ctx.supabase
       .from("credit_ledger")
-      .select("type, amount, created_at")
+      .select("type, amount, metadata, created_at")
       .eq("workspace_id", workspaceId)
       .gte("created_at", fromIso)
       .lte("created_at", toIso)
-      .returns<Array<{ type: string; amount: number; created_at: string }>>(),
+      .returns<CreditLedgerRow[]>(),
   ]);
 
   const scans = (scanRows.data ?? []).filter((scan) => !filters.scanId || scan.id === filters.scanId);
@@ -232,7 +236,7 @@ export async function getAnalytics(ctx: WorkspaceContext, filters: AnalyticsFilt
   for (const entry of ledger) {
     if (entry.type !== "consumption") continue;
     const day = entry.created_at.slice(0, 10);
-    consumedByDay.set(day, (consumedByDay.get(day) ?? 0) + Math.abs(entry.amount));
+    consumedByDay.set(day, (consumedByDay.get(day) ?? 0) + consumedQuantity(entry));
   }
 
   const websiteGaps = countGaps(gapCounts, ["no_website", "weak_website", "no_https", "slow_mobile"]);
@@ -284,7 +288,7 @@ export async function getAnalytics(ctx: WorkspaceContext, filters: AnalyticsFilt
       currency: leads[0]?.currency ?? "TRY",
     },
     credits: {
-      consumed: ledger.filter((entry) => entry.type === "consumption").reduce((sum, entry) => sum + Math.abs(entry.amount), 0),
+      consumed: ledger.filter((entry) => entry.type === "consumption").reduce((sum, entry) => sum + consumedQuantity(entry), 0),
       granted: ledger.filter((entry) => entry.type === "monthly_grant" || entry.type === "purchase").reduce((sum, entry) => sum + Math.abs(entry.amount), 0),
       refunded: ledger.filter((entry) => entry.type === "refund").reduce((sum, entry) => sum + Math.abs(entry.amount), 0),
       byDay: [...consumedByDay.entries()].map(([date, consumed]) => ({ date, consumed })).sort((a, b) => a.date.localeCompare(b.date)),

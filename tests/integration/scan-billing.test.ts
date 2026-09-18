@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { creditKeys, REFERENCE_TYPES } from "@/lib/credits/keys";
 import { buildPricingTable, estimateBusinessCount, estimateScanCredits, perBusinessCost } from "@/lib/credits/pricing";
-import { CreditService } from "@/lib/credits/service";
+import { CreditService, consumedQuantity } from "@/lib/credits/service";
 import { createMemoryCreditStore } from "@/lib/credits/store.memory";
 import { InsufficientCreditsError } from "@/lib/errors";
 import { buildCoveragePlan } from "@/lib/providers/places/coverage";
@@ -190,6 +190,21 @@ describe("running a scan against the ledger", () => {
     const newest = ledger[0];
     expect(newest.balance_after).toBe(94);
     expect(newest.reserved_after).toBe(0);
+  });
+
+  it("records a reservation-backed consumption with amount 0 and the real quantity in metadata", async () => {
+    await credits.reserve(60);
+    await credits.consume("business-a", 3);
+
+    const entry = (await service.getLedger(WORKSPACE, { limit: 10 })).find((row) => row.type === "consumption")!;
+
+    // The credits left the available balance when they were reserved, so this
+    // entry moves nothing: its signed amount is 0 and only `reserved` drops.
+    expect(entry.amount).toBe(0);
+    expect(entry.reserved_after).toBe(57);
+    // Anything reporting "credits used" must read the quantity, not the amount,
+    // or it will report zero for every scan.
+    expect(consumedQuantity(entry)).toBe(3);
   });
 
   it("reports what the scan actually used", async () => {
