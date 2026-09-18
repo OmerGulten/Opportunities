@@ -29,11 +29,18 @@ export function getGlobalT(locale: Locale): TFunction {
   return createGlobalTranslator(dictionaries, locale);
 }
 
-/** Pick the localized column of a bilingual DB row (name_tr / name_en). */
-export function pickLocalized<T extends Record<string, unknown>>(row: T, base: string, locale: Locale): string {
-  const key = `${base}_${locale}` as keyof T;
-  const fallback = `${base}_tr` as keyof T;
-  const value = (row[key] ?? row[fallback]) as unknown;
+/**
+ * Pick the localized column of a bilingual DB row (name_tr / name_en).
+ *
+ * Constrained to `object` rather than `Record<string, unknown>`: the row types
+ * in `src/types/db.ts` are interfaces, and an interface has no implicit index
+ * signature, so it is not assignable to `Record<string, unknown>`. `base` is a
+ * plain string anyway, so the narrower constraint bought no key safety — only
+ * a cast at every call site.
+ */
+export function pickLocalized<T extends object>(row: T, base: string, locale: Locale): string {
+  const columns = row as Record<string, unknown>;
+  const value = columns[`${base}_${locale}`] ?? columns[`${base}_tr`];
   return typeof value === "string" ? value : "";
 }
 

@@ -13,23 +13,26 @@ export function signalMessageKey(signalType: string): string {
   return `signal.${signalType.replace(/\./g, "_")}`;
 }
 
-/** Reasons a signal could not be established. Keys of the `unavailable.*` tree. */
-export type UnavailableReason =
-  | "website_not_found"
-  | "website_not_reachable"
-  | "website_invalid"
-  | "website_not_audited"
-  | "website_discovery_depth"
-  | "robots_not_checked"
-  | "broken_links_not_checked"
-  | "google_field_not_requested"
-  | "google_no_owner_replies"
-  | "instagram_not_fetched"
-  | "instagram_not_checked"
-  | "performance_not_run"
-  | "performance_no_website"
-  | "performance_metric_unavailable"
-  | "audit_failed";
+/** Reasons a signal could not be established. Each is a key of the `unavailable.*` tree. */
+export const UNAVAILABLE_REASONS = [
+  "website_not_found",
+  "website_not_reachable",
+  "website_invalid",
+  "website_not_audited",
+  "website_discovery_depth",
+  "robots_not_checked",
+  "broken_links_not_checked",
+  "google_field_not_requested",
+  "google_no_owner_replies",
+  "instagram_not_fetched",
+  "instagram_not_checked",
+  "performance_not_run",
+  "performance_no_website",
+  "performance_metric_unavailable",
+  "audit_failed",
+] as const;
+
+export type UnavailableReason = (typeof UNAVAILABLE_REASONS)[number];
 
 export interface EmitOptions {
   status?: ObservationStatus;

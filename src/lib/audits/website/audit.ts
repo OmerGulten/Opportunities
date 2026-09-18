@@ -460,7 +460,9 @@ function buildSuccessFindings({ collector, parsed, technical, seo, ux, summary, 
       key: "website_missing_favicon",
       category: "branding",
       severity: "low",
-      status: extra.implicitFaviconFound === false ? "not_found" : "found",
+      // Only a HEAD on /favicon.ico can prove absence; without it the markup
+      // observation alone leaves the question open.
+      status: extra.implicitFaviconFound === false ? "not_found" : "ambiguous",
       evidenceType: extra.implicitFaviconFound === null ? "derived" : "observed",
       confidence: extra.implicitFaviconFound === null ? "low" : "high",
       evidence: { checkedDefaultPath: extra.implicitFaviconFound !== null },

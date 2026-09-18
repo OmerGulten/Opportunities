@@ -1,4 +1,147 @@
 import type { MessageTree } from "../../config";
 
 /** Owned by the analytics feature. Fill in keys used by that feature; keep tr and en in sync. */
-export const analytics: MessageTree = {};
+export const analytics: MessageTree = {
+  title: "Analytics",
+  description: "Counts of what was observed and of what you did in the app during the selected range.",
+  disclosure: {
+    title: "What these numbers are",
+    body: "Everything on this page is descriptive: counts of records observed during scans and of actions you took in the app. None of it is a forecast, a purchase likelihood or expected revenue.",
+  },
+  range: {
+    summary: "{{from}} – {{to}}",
+    basedOn: "Every section below is calculated for this range.",
+  },
+  filters: {
+    title: "Filters",
+    preset: "Range",
+    presets: {
+      d7: "Last 7 days",
+      d30: "Last 30 days",
+      d90: "Last 90 days",
+      d365: "Last 12 months",
+      custom: "Custom range",
+    },
+    from: "From",
+    to: "To",
+    scan: "Scan",
+    allScans: "All scans",
+    scansEmpty: "No scans yet",
+    service: "Service",
+    allServices: "All services",
+    category: "Category",
+    allCategories: "All categories",
+    reset: "Clear filters",
+    hint: "Filters are kept in the address bar, so this view can be shared as a link.",
+  },
+  sections: {
+    scans: {
+      title: "Scan performance",
+      description: "How scans started in the selected range ended.",
+    },
+    discovery: {
+      title: "Discovery and auditing",
+      description: "Records produced by scans; each step is a subset of the one before it.",
+    },
+    opportunities: {
+      title: "Opportunities",
+      description: "How businesses scored in the range are distributed.",
+    },
+    gaps: {
+      title: "Observed digital gaps",
+      description: "Only gaps derived from observable signals are counted; anything that could not be checked is left out.",
+    },
+    outreach: {
+      title: "Outreach preparation",
+      description: "How many drafts you prepared and what you did with them in the app.",
+    },
+    pipeline: {
+      title: "Pipeline",
+      description: "Leads added in the range and the outcomes you recorded.",
+    },
+    credits: {
+      title: "Credit consumption",
+      description: "Entries read from the credit ledger.",
+    },
+  },
+  scans: {
+    started: "Scans started",
+    completed: "Completed",
+    failed: "Failed",
+    cancelled: "Cancelled",
+    perScan: "Businesses per scan",
+    perScanHint: "Average discovered across completed scans",
+    empty: "No scan was started in this range.",
+  },
+  discovery: {
+    discovered: "Discovered",
+    audited: "Audited",
+    scored: "Scored",
+    failed: "Failed records",
+    chartTitle: "From discovery to score",
+    empty: "No records were processed in this range.",
+  },
+  opportunities: {
+    total: "Businesses scored",
+    averageScore: "Average score",
+    notScored: "No score",
+    byServiceTitle: "Primary opportunities by service",
+    byServiceEmpty: "No service was recorded as a primary opportunity in this range.",
+    distributionTitle: "Score distribution",
+    distributionEmpty: "No business was scored in this range.",
+    averageServiceScore: "Service average: {{score}}",
+  },
+  gaps: {
+    website: "From the website",
+    social: "From social profiles",
+    google: "From the Google profile",
+    byGapTitle: "Most frequently observed gaps",
+    empty: "No digital gap was observed in this range.",
+    note: "A gap is counted only when the corresponding check could actually run. Anything that could not be checked is not counted as a gap.",
+    labels: {
+      no_website: "No website found",
+      weak_website: "Weak website",
+      no_https: "No HTTPS",
+      no_instagram: "No Instagram found",
+      inactive_instagram: "Inactive Instagram",
+      google_incomplete: "Incomplete Google profile",
+      low_reviews: "Few reviews",
+      low_rating: "Low rating",
+      missing_hours: "Opening hours missing",
+      few_photos: "Few photos",
+      slow_mobile: "Slow on mobile",
+      unanswered_reviews: "Unanswered reviews",
+    },
+  },
+  outreach: {
+    generated: "Drafts prepared",
+    copied: "Copied",
+    channelsOpened: "Channels opened",
+    contacted: "Drafts acted on",
+    note: "These are counts of your actions in the app. Messages are never sent from here, so delivery is unknown.",
+  },
+  pipeline: {
+    added: "Leads added",
+    meetings: "In the meeting stage",
+    proposals: "In the proposal stage",
+    won: "Won",
+    lost: "Lost",
+    wonValue: "Won value",
+    note: "Stages and won value are what you entered yourself; nothing here is estimated.",
+  },
+  credits: {
+    consumed: "Consumed",
+    granted: "Granted",
+    refunded: "Refunded",
+    byDayTitle: "Consumption by day",
+    byDayEmpty: "No credits were consumed in this range.",
+    chartLabel: "Credits consumed",
+  },
+  chart: {
+    count: "Count",
+  },
+  empty: {
+    title: "No data in this range",
+    description: "Widen the date range or clear the filters.",
+  },
+};

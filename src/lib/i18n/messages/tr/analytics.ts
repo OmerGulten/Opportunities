@@ -1,4 +1,147 @@
 import type { MessageTree } from "../../config";
 
 /** Owned by the analytics feature. Fill in keys used by that feature; keep tr and en in sync. */
-export const analytics: MessageTree = {};
+export const analytics: MessageTree = {
+  title: "Analitik",
+  description: "Seçilen aralıkta gözlemlenen kayıtların ve uygulamada yaptığınız işlemlerin sayımları.",
+  disclosure: {
+    title: "Bu sayfadaki sayılar ne anlama geliyor?",
+    body: "Buradaki tüm değerler betimleyicidir: taramalarda gözlemlenen kayıtların ve sizin uygulamada yaptığınız işlemlerin sayımlarıdır. Hiçbiri tahmin, satın alma olasılığı veya beklenen gelir değildir.",
+  },
+  range: {
+    summary: "{{from}} – {{to}}",
+    basedOn: "Tüm bölümler bu aralığa göre hesaplandı.",
+  },
+  filters: {
+    title: "Filtreler",
+    preset: "Aralık",
+    presets: {
+      d7: "Son 7 gün",
+      d30: "Son 30 gün",
+      d90: "Son 90 gün",
+      d365: "Son 12 ay",
+      custom: "Özel aralık",
+    },
+    from: "Başlangıç",
+    to: "Bitiş",
+    scan: "Tarama",
+    allScans: "Tüm taramalar",
+    scansEmpty: "Henüz tarama yok",
+    service: "Hizmet",
+    allServices: "Tüm hizmetler",
+    category: "Kategori",
+    allCategories: "Tüm kategoriler",
+    reset: "Filtreleri temizle",
+    hint: "Filtreler adres çubuğunda tutulur; bu görünümün bağlantısını paylaşabilirsiniz.",
+  },
+  sections: {
+    scans: {
+      title: "Tarama performansı",
+      description: "Seçilen aralıkta başlatılan taramaların sonuçlanma durumu.",
+    },
+    discovery: {
+      title: "Keşif ve denetim",
+      description: "Taramaların ürettiği kayıt sayıları; her adım bir öncekinin alt kümesidir.",
+    },
+    opportunities: {
+      title: "Fırsatlar",
+      description: "Aralıkta puanlanan işletmelerin dağılımı.",
+    },
+    gaps: {
+      title: "Gözlemlenen dijital eksikler",
+      description: "Yalnızca gözlemlenebilen sinyallerden türetilen eksikler sayılır; kontrol edilemeyen alanlar buraya girmez.",
+    },
+    outreach: {
+      title: "İletişim hazırlığı",
+      description: "Uygulamada hazırladığınız mesajların ve yaptığınız işlemlerin sayısı.",
+    },
+    pipeline: {
+      title: "Satış hattı",
+      description: "Aralıkta satış hattına eklenen kayıtlar ve sizin işaretlediğiniz sonuçlar.",
+    },
+    credits: {
+      title: "Kredi kullanımı",
+      description: "Kredi defterinden okunan hareketler.",
+    },
+  },
+  scans: {
+    started: "Başlatılan tarama",
+    completed: "Tamamlanan",
+    failed: "Başarısız",
+    cancelled: "İptal edilen",
+    perScan: "Tarama başına işletme",
+    perScanHint: "Tamamlanan taramaların keşif ortalaması",
+    empty: "Bu aralıkta tarama başlatılmamış.",
+  },
+  discovery: {
+    discovered: "Keşfedilen",
+    audited: "Denetlenen",
+    scored: "Puanlanan",
+    failed: "Başarısız kayıt",
+    chartTitle: "Keşiften puana",
+    empty: "Bu aralıkta işlenmiş kayıt yok.",
+  },
+  opportunities: {
+    total: "Puanlanan işletme",
+    averageScore: "Ortalama puan",
+    notScored: "Puan yok",
+    byServiceTitle: "Hizmete göre birincil fırsatlar",
+    byServiceEmpty: "Bu aralıkta hiçbir hizmet birincil fırsat olarak işaretlenmedi.",
+    distributionTitle: "Puan dağılımı",
+    distributionEmpty: "Bu aralıkta puanlanmış işletme yok.",
+    averageServiceScore: "Hizmet ortalaması: {{score}}",
+  },
+  gaps: {
+    website: "Web sitesi kaynaklı",
+    social: "Sosyal medya kaynaklı",
+    google: "Google profili kaynaklı",
+    byGapTitle: "En sık gözlemlenen eksikler",
+    empty: "Bu aralıkta gözlemlenen dijital eksik yok.",
+    note: "Bir eksik yalnızca ilgili kontrol yapılabildiyse sayılır. Kontrol edilemeyen alanlar eksik olarak sayılmaz.",
+    labels: {
+      no_website: "Web sitesi bulunamadı",
+      weak_website: "Web sitesi zayıf",
+      no_https: "HTTPS yok",
+      no_instagram: "Instagram bulunamadı",
+      inactive_instagram: "Instagram hareketsiz",
+      google_incomplete: "Google profili eksik",
+      low_reviews: "Az yorum",
+      low_rating: "Düşük puan",
+      missing_hours: "Çalışma saatleri eksik",
+      few_photos: "Az fotoğraf",
+      slow_mobile: "Mobilde yavaş",
+      unanswered_reviews: "Yanıtsız yorumlar",
+    },
+  },
+  outreach: {
+    generated: "Hazırlanan taslak",
+    copied: "Kopyalanan",
+    channelsOpened: "Açılan kanal",
+    contacted: "İşlem yapılan taslak",
+    note: "Bu sayımlar uygulamadaki işlemlerinizi gösterir. Mesajlar uygulamadan gönderilmez; teslim edilip edilmediği bilinmez.",
+  },
+  pipeline: {
+    added: "Eklenen kayıt",
+    meetings: "Görüşme aşamasında",
+    proposals: "Teklif aşamasında",
+    won: "Kazanıldı",
+    lost: "Kaybedildi",
+    wonValue: "Kazanılan tutar",
+    note: "Aşamalar ve kazanılan tutar sizin girdiğiniz bilgilerdir; hesaplanmış bir tahmin değildir.",
+  },
+  credits: {
+    consumed: "Harcanan",
+    granted: "Yüklenen",
+    refunded: "İade edilen",
+    byDayTitle: "Güne göre harcama",
+    byDayEmpty: "Bu aralıkta kredi harcanmamış.",
+    chartLabel: "Harcanan kredi",
+  },
+  chart: {
+    count: "Adet",
+  },
+  empty: {
+    title: "Bu aralıkta veri yok",
+    description: "Tarih aralığını genişletin veya filtreleri temizleyin.",
+  },
+};
