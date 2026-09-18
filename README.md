@@ -85,7 +85,8 @@ force this even when keys exist. The map degrades to a readable placeholder with
 | `NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY` | Maps in the browser | Restrict by HTTP referrer |
 | `GOOGLE_PAGESPEED_API_KEY` | Measured performance scores | Without it, results are heuristic and labelled as such |
 | `OPENAI_API_KEY`, `OPENAI_MODEL` | AI drafting | Server only |
-| `INTERNAL_API_SECRET` | `/api/internal/*` cron endpoints | Bearer token |
+| `INTERNAL_API_SECRET` | manual/internal `/api/internal/*` calls | Bearer token |
+| `CRON_SECRET` | Vercel Cron requests | Bearer token |
 
 ## Commands
 
