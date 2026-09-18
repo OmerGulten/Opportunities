@@ -4,8 +4,8 @@ export const createReportSchema = z.object({
   businessId: z.uuid(),
   title: z.string().trim().max(160).optional(),
   locale: z.enum(["tr", "en"]).optional(),
-  /** Null or omitted means the link does not expire until it is revoked. */
-  expiresInDays: z.number().int().min(1).max(365).nullable().optional(),
+  /** Reports contain provider-derived observations; keep their lifetime finite. */
+  expiresInDays: z.number().int().min(1).max(30).default(30),
 });
 
 export type CreateReportRequest = z.infer<typeof createReportSchema>;
