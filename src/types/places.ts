@@ -44,7 +44,8 @@ export interface PlaceReviewSample {
   rating: number | null;
   relativeTime: string | null;
   publishTime: string | null; // ISO
-  hasOwnerReply: boolean;
+  /** null when the provider does not expose owner replies (Google Places API (New) does not). */
+  hasOwnerReply: boolean | null;
 }
 
 export interface PlaceDetails extends PlaceSummary {
@@ -58,6 +59,8 @@ export interface PlaceDetails extends PlaceSummary {
   photoCount: number | null;
   priceLevel: string | null;
   reviewSample: PlaceReviewSample[] | null;
+  /** Social profile references if the provider exposes them (Google does not; demo does). */
+  socialProfiles: Array<{ platform: string; url: string }> | null;
   detailLevel: AuditDepth;
   fieldMask: string;
   fetchedAt: string;
