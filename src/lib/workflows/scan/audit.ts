@@ -19,6 +19,7 @@ import type { BusinessRow, CreditPricingRuleRow, ScanRow, ServiceRow, ServiceRul
 import type { PlaceDetails } from "@/types/places";
 import type { Signal } from "@/types/signals";
 
+import { passesPostAuditFilters, passesPreAuditFilters } from "./filters";
 import { adminClient, appendScanEvent, bumpScanCounters, claimScanJob, errorCodeOf, errorMessageOf, finishScanJob, isScanCancelled, stepLogger } from "./shared";
 
 /** Businesses of a scan that still need auditing, oldest discovery first. */
@@ -179,71 +180,6 @@ export async function auditAndScoreBusiness(scanId: string, businessId: string, 
 }
 
 auditAndScoreBusiness.maxRetries = 2;
-
-// ---------------------------------------------------------------------------
-// filters
-// ---------------------------------------------------------------------------
-
-/**
- * Filters decidable from the provider profile alone.
- *
- * At `discovery` depth the provider was not asked for rating, website, hours or
- * photos, so those fields are unknown rather than absent. Filtering on unknown
- * data would silently drop every business, so discovery scans skip these checks
- * entirely and the filters apply only in the results view.
- */
-export function passesPreAuditFilters(details: PlaceDetails, filters: Partial<ScanFilters>, depth: ScanRow["audit_depth"] = "basic"): boolean {
-  if (depth === "discovery") return true;
-
-  const hasWebsite = Boolean(details.websiteUri);
-  if (filters.website === "none" && hasWebsite) return false;
-  if ((filters.website === "weak" || filters.website === "strong") && !hasWebsite) return false;
-
-  const rating = details.rating;
-  if (filters.minRating !== null && filters.minRating !== undefined && (rating === null || rating < filters.minRating)) return false;
-  if (filters.maxRating !== null && filters.maxRating !== undefined && rating !== null && rating > filters.maxRating) return false;
-
-  const reviews = details.userRatingCount;
-  if (filters.minReviews !== null && filters.minReviews !== undefined && (reviews === null || reviews < filters.minReviews)) return false;
-  if (filters.maxReviews !== null && filters.maxReviews !== undefined && reviews !== null && reviews > filters.maxReviews) return false;
-
-  for (const gap of filters.google ?? []) {
-    if (gap === "missing_website" && hasWebsite) return false;
-    if (gap === "missing_hours" && details.openingHours !== null) return false;
-    if (gap === "missing_photos" && (details.photoCount ?? 0) >= 5) return false;
-    if (gap === "low_reviews" && (reviews ?? 0) >= 10) return false;
-    if (gap === "low_rating" && (rating ?? 0) >= 4) return false;
-  }
-  return true;
-}
-
-/** Filters that need audit signals (website quality, Instagram presence). */
-export function passesPostAuditFilters(signals: readonly Signal[], filters: Partial<ScanFilters>): boolean {
-  const byType = new Map(signals.map((signal) => [signal.signalType, signal]));
-
-  if (filters.website === "weak" || filters.website === "strong") {
-    const quality = byType.get("website.quality");
-    if (!quality || quality.status !== "found") return false;
-    if (filters.website === "weak" && quality.value !== "weak" && quality.value !== "average") return false;
-    if (filters.website === "strong" && quality.value !== "strong") return false;
-  }
-
-  if (filters.instagram && filters.instagram !== "any") {
-    const instagram = byType.get("instagram.status");
-    const value = instagram?.value;
-    if (filters.instagram === "found" && value !== "found") return false;
-    if (filters.instagram === "not_found" && value !== "not_found") return false;
-    if (filters.instagram === "not_checked" && value !== "not_checked") return false;
-  }
-
-  // "google" gaps were already applied pre-audit; incomplete is the one that
-  // needs the derived completeness score.
-  if ((filters.google ?? []).includes("incomplete")) {
-    const completeness = byType.get("google.completeness_score");
-    if (typeof completeness?.value === "number" && completeness.value >= 60) return false;
-  }
-  return true;
-}
 
 // ---------------------------------------------------------------------------
 // persistence helpers
