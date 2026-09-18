@@ -112,6 +112,10 @@ Supabase Postgres. Migrations live in `supabase/migrations`, reference data in
 * `credit_apply(...)`: atomic ledger operation with idempotency, row lock, balance checks.
   Returns the ledger row (existing row on replay). Raises `insufficient_credits`.
 * `rate_limit_hit(key, limit, window_seconds) returns boolean`.
+* `increment_scan_counters(scan, ...)`: atomic counter bumps from workflow steps.
+* `increment_template_usage(template)`: usage telemetry after a draft is saved.
+* `touch_public_report(token)`: view counter for anonymous report viewers.
+* `delete_workspace(workspace)`: owner-only cascade delete with an audit row.
 * `assert_credit_ledger_immutable()`: trigger blocking UPDATE / DELETE on `credit_ledger`.
 
 ## Views

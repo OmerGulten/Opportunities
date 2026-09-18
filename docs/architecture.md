@@ -35,49 +35,60 @@ list of matched rules with their points. We never predict purchase probability.
 
 ```
 src/
-  app/                 Route segments (App Router). Thin: fetch, then render / call a feature service.
-    (marketing)/       Public pages: landing, legal
-    (auth)/            Sign in / sign up / callback
-    (app)/             Authenticated app shell (sidebar + workspace context)
-      onboarding/
-      dashboard/ scans/ opportunities/ businesses/ pipeline/ messages/ templates/ analytics/ settings/
-    admin/             Platform admin (is_platform_admin only)
-    report/[token]/    Public read-only audit report
-    api/               Public application API (Route Handlers)
-    api/internal/      Internal endpoints (workflow callbacks, cron), INTERNAL_API_SECRET protected
+  app/
+    (marketing)/         Legal pages (terms, privacy, cookies, AI disclosure)
+    (auth)/              Sign in, sign up, forgot/reset password
+    (onboarding)/        First-run workspace wizard
+    (app)/               Authenticated shell: sidebar + topbar, one segment per feature
+    admin/               Platform admin (is_platform_admin only)
+    report/[token]/      Public read-only audit report
+    api/                 Application API (Route Handlers)
+    api/internal/        Cron and workflow callbacks, INTERNAL_API_SECRET protected
+    page.tsx             Landing page
   components/
-    ui/                shadcn primitives (generated)
-    app/               App shell: sidebar, topbar, workspace switcher, page header
-    shared/            Cross-feature components: StatusBadge, ScoreRing, EvidenceCard, DataTable
-  features/<domain>/   Feature modules: server services, queries, actions, domain components
+    ui/                  shadcn primitives (generated)
+    app/                 Shell: sidebar, topbar, workspace switcher, credits pill, logo
+    shared/              Cross-feature: StatusBadge, ScoreRing, DataTable, PageHeader, ...
+    map/                 Google Maps canvas, radius circle, polygon drawer, markers
+  features/<domain>/     One folder per domain: schemas.ts (Zod), service.ts (writes),
+                         queries.ts (reads), actions.ts (server actions), components/
+                         Domains: auth, workspace, scans, businesses, opportunities,
+                         messages, templates, pipeline, analytics, reports, settings, admin
   lib/
-    config/            env parsing (server vs public), feature flags, demo mode
-    errors/            Typed AppError hierarchy + HTTP mapping
-    logging/           Structured logger with redaction
-    supabase/          Browser / server / admin (service role) clients, proxy session refresh
-    auth/              Session + workspace context resolution, role guards
-    api/               Route handler wrapper (auth, validation, rate limit, error mapping)
-    i18n/              Dictionaries (tr default, en) and t() helpers
+    config/              env parsing (public vs server), demo-mode flags
+    errors/              Typed AppError hierarchy and HTTP mapping
+    logging/             Structured JSON logger with redaction
+    supabase/            Browser / server / admin clients, proxy session refresh
+    auth/                Session and workspace context, role guards
+    api/                 withApi / withInternalApi / withPublicApi route wrappers
+    db/                  system_settings and reference-data readers
+    i18n/                tr + en dictionaries, server getT(), client useT()
     providers/
-      places/          PlaceProvider interface, GooglePlacesProvider, DemoPlaceProvider, coverage cells
-      ai/              AIProvider interface, OpenAIProvider, DemoAIProvider, prompt builders, Zod schemas
-      performance/     PerformanceProvider, PageSpeedProvider, HeuristicPerformanceProvider
-      policy/          Provider policy layer (cacheable / persistent fields, retention, attribution)
-    audits/            Website audit (cheerio), Google Business audit, Instagram discovery
-    scoring/           Rule engine: signals x service_rules -> explainable 0-100 scores
-    credits/           CreditService (reserve / consume / refund / grant) over the immutable ledger
-    security/          safeFetchUrl (SSRF-hardened), token generation, sanitisation
-    rate-limit/        DB-backed fixed-window rate limiter (configurable via system_settings)
-    activity/          Activity timeline abstraction (append events)
-    workflows/         Scan workflow + steps (Workflow DevKit)
-    reporting/         Public report snapshot builder
-    demo/              Fixtures for demo providers
-  types/               Shared domain & row types
+      registry.ts        Chooses real or demo providers from env
+      places/            PlaceProvider: Google Places (New), demo, coverage, field masks
+      ai/                AIProvider: OpenAI Responses, demo, prompts, schemas, fact guard
+      performance/       PerformanceProvider: PageSpeed, heuristic
+      policy/            Provider policy layer (caching, attribution, export limits)
+      call-log.ts        Timing and cost record for every external call
+    audits/              Website, Google Business, Instagram, performance, branding,
+                         competitor benchmark, orchestration and row mapping
+    scoring/             Rule engine: signals x service_rules -> explainable scores
+    credits/             CreditService over the immutable ledger, pricing, keys
+    security/            safeFetchUrl (SSRF-hardened), IP/URL guards, tokens, sanitise
+    billing/             BillingProvider / SubscriptionProvider, mock implementation
+    workflows/           scan-state.ts plus scan/ (workflow bodies and steps)
+    geo/                 Haversine, polygon validation and area
+    demo/                Fictional businesses and fixture websites
+    rate-limit/          DB-backed fixed-window limiter
+    activity/            Activity timeline append helper
+    utils/               Formatting and slug helpers
+  types/                 Shared domain types (common, signals, audits, scoring, places, ai, db)
 supabase/
-  migrations/          SQL migrations (schema, RLS, functions)
-  seed.sql             Reference data (categories, services, rules, plans, templates, credit rules)
-docs/                  This documentation
-tests/                 Cross-module tests and fixtures
+  migrations/            Schema, functions, RLS
+  seed.sql               Categories, services, scoring rules, plans, pricing, templates
+scripts/                 check-sql.ts, check-i18n.ts
+docs/                    This documentation
+tests/                   Cross-module fixtures and integration tests
 ```
 
 ## Request flow
