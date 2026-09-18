@@ -185,6 +185,52 @@ export interface PipelineStageRow {
   is_default: boolean;
 }
 
+export interface WorkspaceInvitationRow {
+  id: string;
+  workspace_id: string;
+  email: string;
+  role: WorkspaceRole;
+  token: string;
+  invited_by: string | null;
+  expires_at: string;
+  accepted_at: string | null;
+  created_at: string;
+}
+
+export interface SavedAreaRow {
+  id: string;
+  workspace_id: string;
+  name: string;
+  geometry: Json;
+  area_km2: number | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface IntegrationRow {
+  id: string;
+  workspace_id: string;
+  type: string;
+  status: "inherited" | "enabled" | "disabled";
+  config: Record<string, Json>;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Secrets are never stored: only a prefix for display and a sha256 hash. */
+export interface ApiKeyRow {
+  id: string;
+  workspace_id: string;
+  name: string;
+  key_prefix: string;
+  key_hash: string;
+  scopes: string[];
+  last_used_at: string | null;
+  revoked_at: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
 export interface ScanRow {
   id: string;
   workspace_id: string;

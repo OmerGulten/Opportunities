@@ -17,7 +17,6 @@ import { safeFetchUrl, type SafeFetcher } from "@/lib/security/safe-fetch";
 import type { Locale } from "@/types/common";
 import type { BusinessRow, CreditPricingRuleRow, ScanRow, ServiceRow, ServiceRuleRow } from "@/types/db";
 import type { PlaceDetails } from "@/types/places";
-import type { Signal } from "@/types/signals";
 
 import { passesPostAuditFilters, passesPreAuditFilters } from "./filters";
 import { adminClient, appendScanEvent, bumpScanCounters, claimScanJob, errorCodeOf, errorMessageOf, finishScanJob, isScanCancelled, stepLogger } from "./shared";
