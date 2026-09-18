@@ -126,24 +126,26 @@ describe("CreditService.releaseReservation", () => {
     await service.consume(consumeInput(12, "b1"));
 
     const release = { workspaceId: WS, ...scanRef, idempotencyKey: creditKeys.scanRelease(SCAN) };
-    await expect(service.releaseReservation(release)).resolves.toEqual({ refunded: 18 });
+    await expect(service.releaseReservation(release)).resolves.toEqual({ refunded: 18, applied: true });
     await expect(service.getBalance(WS)).resolves.toMatchObject({ available: 88, reserved: 0 });
     expect(await store.getReservation(scanRef.referenceType, scanRef.referenceId)).toMatchObject({ refunded_amount: 18, status: "settled" });
 
     const ledgerBefore = store.snapshot().ledger.length;
-    await expect(service.releaseReservation(release)).resolves.toEqual({ refunded: 18 });
+    // The replay reports the same total but writes nothing, so callers must
+    // assign this figure rather than add it.
+    await expect(service.releaseReservation(release)).resolves.toEqual({ refunded: 18, applied: false });
     expect(store.snapshot().ledger.length).toBe(ledgerBefore);
     await expect(service.getBalance(WS)).resolves.toMatchObject({ available: 88, reserved: 0 });
   });
 
   it("returns 0 and writes nothing when there is nothing to release", async () => {
     const { service, store } = setup(100);
-    await expect(service.releaseReservation({ workspaceId: WS, ...scanRef, idempotencyKey: "rel-none" })).resolves.toEqual({ refunded: 0 });
+    await expect(service.releaseReservation({ workspaceId: WS, ...scanRef, idempotencyKey: "rel-none" })).resolves.toEqual({ refunded: 0, applied: false });
 
     await service.reserve(reserveInput(10));
     await service.consume(consumeInput(10, "b1"));
     const before = store.snapshot().ledger.length;
-    await expect(service.releaseReservation({ workspaceId: WS, ...scanRef, idempotencyKey: "rel-full" })).resolves.toEqual({ refunded: 0 });
+    await expect(service.releaseReservation({ workspaceId: WS, ...scanRef, idempotencyKey: "rel-full" })).resolves.toEqual({ refunded: 0, applied: false });
     expect(store.snapshot().ledger.length).toBe(before);
   });
 });

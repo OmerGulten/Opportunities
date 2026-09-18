@@ -97,12 +97,13 @@ export class CreditService {
     assertNonEmptyString(input.idempotencyKey, "idempotencyKey");
 
     const previous = await this.store.getLedgerEntry(input.idempotencyKey);
-    if (previous) return { refunded: Math.max(0, previous.amount) };
+    // Replay: the ledger already applied this release exactly once.
+    if (previous) return { refunded: Math.max(0, previous.amount), applied: false };
 
     const reservation = await this.store.getReservation(input.referenceType, input.referenceId);
-    if (!reservation) return { refunded: 0 };
+    if (!reservation) return { refunded: 0, applied: false };
     const remaining = reservationRemaining(reservation);
-    if (remaining <= 0) return { refunded: 0 };
+    if (remaining <= 0) return { refunded: 0, applied: false };
 
     const row = await this.store.apply({
       workspaceId: input.workspaceId,
@@ -114,7 +115,7 @@ export class CreditService {
       metadata: { ...(input.metadata ?? {}), [QUANTITY_METADATA_KEY]: remaining, reason: "release" },
       actorId: input.actorId ?? null,
     });
-    return { refunded: Math.max(0, row.amount) };
+    return { refunded: Math.max(0, row.amount), applied: true };
   }
 
   async getBalance(workspaceId: string): Promise<CreditBalance> {

@@ -74,8 +74,20 @@ export interface CreditReleaseInput {
 }
 
 export interface CreditReleaseResult {
-  /** Credits moved back from reserved to available by this release (0 when nothing remained). */
+  /**
+   * Total credits this release returned to the balance for the reference.
+   *
+   * On a replay this reports the original release's amount, not a second
+   * refund — the ledger applies it exactly once. Callers must therefore *set*
+   * a stored "refunded" figure from this value rather than add to it; use
+   * `applied` to tell the two cases apart.
+   */
   refunded: number;
+  /**
+   * True when this call actually moved credits. False on a replay, when the
+   * reservation was already fully consumed, and when there is no reservation.
+   */
+  applied: boolean;
 }
 
 export interface CreditBalance {

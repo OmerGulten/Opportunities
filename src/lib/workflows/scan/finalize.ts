@@ -60,6 +60,9 @@ export async function finalizeScan(scanId: string): Promise<FinalizeResult> {
     : finalStatusFor({ discovered: scan.discovered_count, failed: scan.failed_count, scored: scan.scored_count }, discoveryFailed);
 
   // Always release the remainder, including for cancelled and failed scans.
+  // The release is idempotent and returns the total it refunded for this scan,
+  // so the figure is assigned, never accumulated: cancel and finalize both run
+  // this and must not double-count.
   let refunded = scan.refunded_credits;
   try {
     const release = await getCreditService().releaseReservation({
@@ -68,7 +71,7 @@ export async function finalizeScan(scanId: string): Promise<FinalizeResult> {
       referenceId: scanId,
       idempotencyKey: creditKeys.scanRelease(scanId),
     });
-    if (release.refunded > 0) refunded = scan.refunded_credits + release.refunded;
+    if (release.refunded > 0) refunded = release.refunded;
   } catch (err) {
     // A failed refund must not strand the scan in a running state; it is logged
     // and reconciled by the reservation row, which still records the remainder.

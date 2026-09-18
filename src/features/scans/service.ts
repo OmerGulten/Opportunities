@@ -192,11 +192,10 @@ export async function cancelScan(ctx: WorkspaceContext, scanId: string): Promise
         idempotencyKey: creditKeys.scanRelease(scanId),
         actorId: ctx.user.id,
       });
+      // Assigned, not accumulated: the workflow's finalize step releases the
+      // same reservation and would otherwise double-count the refund.
       if (release.refunded > 0) {
-        await ctx.supabase
-          .from("scans")
-          .update({ refunded_credits: scan.refunded_credits + release.refunded })
-          .eq("id", scanId);
+        await ctx.supabase.from("scans").update({ refunded_credits: release.refunded }).eq("id", scanId);
       }
     } catch (err) {
       logger.warn("scan_reservation_release_failed", { scanId, error: err instanceof Error ? err.message : String(err) });
