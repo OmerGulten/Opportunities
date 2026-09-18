@@ -336,8 +336,8 @@ export interface BusinessRow {
   workspace_id: string;
   provider: string;
   provider_place_id: string;
-  normalized_name: string;
-  canonical_fingerprint: string;
+  normalized_name: string | null;
+  canonical_fingerprint: string | null;
   primary_category_id: string | null;
   is_ignored: boolean;
   ignored_at: string | null;
