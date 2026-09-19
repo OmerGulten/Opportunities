@@ -141,7 +141,7 @@ export async function createScan(ctx: WorkspaceContext, input: CreateScanInput):
 
   const workflowRunId = await startScanWorkflow(scan.id);
   if (workflowRunId) {
-    await ctx.supabase.from("scans").update({ workflow_run_id: workflowRunId, status: "queued", started_at: new Date().toISOString() }).eq("id", scan.id);
+    await createAdminClient().from("scans").update({ workflow_run_id: workflowRunId, status: "queued", started_at: new Date().toISOString() }).eq("id", scan.id);
   }
 
   return { scan: { ...scan, workflow_run_id: workflowRunId }, estimate, workflowRunId };
@@ -197,7 +197,10 @@ export async function cancelScan(ctx: WorkspaceContext, scanId: string): Promise
         actorId: ctx.user.id,
       });
       if (release.refunded > 0) {
-        await ctx.supabase.from("scans").update({ refunded_credits: release.refunded }).eq("id", scanId);
+        // Written with the service-role client on purpose: credit accounting on
+        // the scan row is server-owned, and `authenticated` no longer holds the
+        // column privilege that would let a session rewrite it directly.
+        await createAdminClient().from("scans").update({ refunded_credits: release.refunded }).eq("id", scanId);
       }
     } catch (err) {
       logger.error("scan_reservation_release_failed", { scanId, error: err instanceof Error ? err.message : String(err) });
@@ -233,7 +236,7 @@ export async function retryScan(ctx: WorkspaceContext, scanId: string): Promise<
 
   const workflowRunId = await startScanWorkflow(scanId);
   if (workflowRunId) {
-    await ctx.supabase.from("scans").update({ workflow_run_id: workflowRunId, status: "queued", started_at: new Date().toISOString() }).eq("id", scanId);
+    await createAdminClient().from("scans").update({ workflow_run_id: workflowRunId, status: "queued", started_at: new Date().toISOString() }).eq("id", scanId);
   }
   return { ...updated, workflow_run_id: workflowRunId };
 }
