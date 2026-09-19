@@ -246,16 +246,58 @@ suite("privilege escalation is impossible", () => {
 });
 
 suite("server-owned scan state is not client-writable", () => {
-  it("a member cannot rewrite its own scan's credit accounting", async () => {
-    await asA.from("scans").update({ consumed_credits: 0, reserved_credits: 0, refunded_credits: 999, status: "completed" }).eq("id", A.scanId);
-    const after = await admin
-      .from("scans")
-      .select("consumed_credits, reserved_credits, refunded_credits, status")
-      .eq("id", A.scanId)
-      .single<{ consumed_credits: number; reserved_credits: number; refunded_credits: number; status: string }>();
-    expect(after.data?.consumed_credits).toBe(4);
-    expect(after.data?.reserved_credits).toBe(10);
-    expect(after.data?.refunded_credits).toBe(0);
+  /**
+   * One column per statement, deliberately.
+   *
+   * The first version of this test set a credit column and status together.
+   * Postgres rejects the whole UPDATE for the column the role lacks privilege
+   * on, so status never moved and the test passed while a status-only UPDATE
+   * was in fact accepted. Bundling columns hides exactly the gap being tested.
+   */
+  it.each([
+    ["consumed_credits", 0, 4],
+    ["reserved_credits", 0, 10],
+    ["refunded_credits", 999, 0],
+  ])("a member cannot rewrite %s on its own scan", async (column, attempt, expected) => {
+    await asA.from("scans").update({ [column]: attempt }).eq("id", A.scanId);
+    const after = await admin.from("scans").select(column).eq("id", A.scanId).single<Record<string, number>>();
+    expect(after.data?.[column]).toBe(expected);
+  });
+
+  it.each(["completed", "queued", "failed", "cancelled", "discovering"])(
+    "a member cannot drive its own scan to '%s' by hand",
+    async (target) => {
+      await asA.from("scans").update({ status: target }).eq("id", A.scanId);
+      const after = await admin.from("scans").select("status").eq("id", A.scanId).single<{ status: string }>();
+      expect(after.data?.status).toBe("created");
+    },
+  );
+
+  it.each(["started_at", "cancelled_at", "completed_at"])("a member cannot stamp %s by hand", async (column) => {
+    await asA.from("scans").update({ [column]: new Date().toISOString() }).eq("id", A.scanId);
+    const after = await admin.from("scans").select(column).eq("id", A.scanId).single<Record<string, string | null>>();
+    expect(after.data?.[column]).toBeNull();
+  });
+
+  it("cancellation still works, but only through the guarded function", async () => {
+    const { error } = await asA.rpc("request_scan_cancellation", { p_scan: A.scanId });
+    expect(error).toBeNull();
+    const after = await admin.from("scans").select("status").eq("id", A.scanId).single<{ status: string }>();
+    expect(after.data?.status).toBe("cancelled");
+  });
+
+  it("the cancellation function refuses a scan in another workspace", async () => {
+    const { error } = await asA.rpc("request_scan_cancellation", { p_scan: B.scanId });
+    expect(error).not.toBeNull();
+    const after = await admin.from("scans").select("status").eq("id", B.scanId).single<{ status: string }>();
+    expect(after.data?.status).toBe("created");
+  });
+
+  it("the cancellation function refuses a terminal scan", async () => {
+    // A.scanId is already cancelled by the test above; cancelling again must
+    // fail rather than restamp the timestamps.
+    const { error } = await asA.rpc("request_scan_cancellation", { p_scan: A.scanId });
+    expect(error).not.toBeNull();
   });
 
   it("a member cannot hijack the workflow run id", async () => {

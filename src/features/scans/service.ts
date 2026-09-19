@@ -166,13 +166,15 @@ export async function cancelScan(ctx: WorkspaceContext, scanId: string): Promise
   const scan = await requireScan(ctx, scanId);
   if (!isCancellable(scan.status)) throw new ConflictError("This scan can no longer be cancelled", { details: { status: scan.status } });
 
-  const { data: updated, error } = await ctx.supabase
-    .from("scans")
-    .update({ status: "cancelled", cancelled_at: new Date().toISOString(), completed_at: new Date().toISOString() })
-    .eq("id", scanId)
-    .select("*")
-    .single<ScanRow>();
-  if (error || !updated) throw toAppError(error ?? new Error("Scan could not be cancelled"));
+  // Through the RPC rather than a table write: `authenticated` no longer holds
+  // the status column privilege, because a direct UPDATE went around the state
+  // machine entirely. The function re-checks membership and the transition, and
+  // guards on status inside the UPDATE so two concurrent cancels serialise.
+  const { data: updated, error } = await ctx.supabase.rpc("request_scan_cancellation", { p_scan: scanId }).single<ScanRow>();
+  if (error || !updated) {
+    if (error?.code === "55000") throw new ConflictError("This scan can no longer be cancelled", { details: { status: scan.status } });
+    throw toAppError(error ?? new Error("Scan could not be cancelled"));
+  }
 
   if (scan.workflow_run_id) {
     try {
