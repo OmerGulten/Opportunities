@@ -57,24 +57,49 @@ export interface TeamMember {
   isOwner: boolean;
 }
 
+interface MemberProfile {
+  id: string;
+  display_name: string | null;
+  email: string | null;
+  avatar_url: string | null;
+}
+
 export async function listTeam(ctx: WorkspaceContext): Promise<TeamMember[]> {
   const { data, error } = await ctx.supabase
     .from("workspace_members")
-    .select("user_id, role, joined_at, profiles:user_id(display_name, email, avatar_url)")
+    .select("user_id, role, joined_at")
     .eq("workspace_id", ctx.workspace.id)
     .order("joined_at")
-    .returns<Array<Pick<WorkspaceMemberRow, "user_id" | "role" | "joined_at"> & { profiles: { display_name: string | null; email: string | null; avatar_url: string | null } | null }>>();
+    .returns<Array<Pick<WorkspaceMemberRow, "user_id" | "role" | "joined_at">>>();
   if (error) throw toAppError(error);
+  const members = data ?? [];
+  if (members.length === 0) return [];
 
-  return (data ?? []).map((row) => ({
-    userId: row.user_id,
-    role: row.role,
-    displayName: row.profiles?.display_name ?? null,
-    email: row.profiles?.email ?? null,
-    avatarUrl: row.profiles?.avatar_url ?? null,
-    joinedAt: row.joined_at,
-    isOwner: row.user_id === ctx.workspace.owner_id,
-  }));
+  // Fetched separately rather than embedded: workspace_members.user_id
+  // references auth.users, which PostgREST does not expose, so there is no
+  // relationship it can follow -- and none to public.profiles either. Asking
+  // for the embed answers PGRST200 and takes the whole page down with it.
+  // Reading these rows is what the profiles_select_coworkers policy is for.
+  const { data: profileRows, error: profileError } = await ctx.supabase
+    .from("profiles")
+    .select("id, display_name, email, avatar_url")
+    .in("id", members.map((member) => member.user_id))
+    .returns<MemberProfile[]>();
+  if (profileError) throw toAppError(profileError);
+  const profiles = new Map((profileRows ?? []).map((profile) => [profile.id, profile]));
+
+  return members.map((row) => {
+    const profile = profiles.get(row.user_id);
+    return {
+      userId: row.user_id,
+      role: row.role,
+      displayName: profile?.display_name ?? null,
+      email: profile?.email ?? null,
+      avatarUrl: profile?.avatar_url ?? null,
+      joinedAt: row.joined_at,
+      isOwner: row.user_id === ctx.workspace.owner_id,
+    };
+  });
 }
 
 export interface PendingInvitation {
