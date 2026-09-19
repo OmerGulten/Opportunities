@@ -19,12 +19,28 @@ const publicSchema = z.object({
   NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID: z.string().min(1).optional(),
 });
 
+/**
+ * The browser-safe Supabase key.
+ *
+ * Supabase renamed this from "anon" to "publishable", and the Vercel–Supabase
+ * integration still provisions `NEXT_PUBLIC_SUPABASE_ANON_KEY`. Accepting either
+ * means a project wired up by that integration works untouched, instead of
+ * needing the same value stored twice under two names.
+ *
+ * Both names are referenced literally: `NEXT_PUBLIC_*` is inlined at build time
+ * by matching the literal text, so a computed lookup would silently produce
+ * `undefined` in the browser.
+ */
+export function publishableKey(): string | undefined {
+  return process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || undefined;
+}
+
 // NEXT_PUBLIC_ variables must be referenced literally so Next.js can inline them.
 export const publicEnv = publicSchema.parse({
   NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
   NEXT_PUBLIC_DEFAULT_LOCALE: process.env.NEXT_PUBLIC_DEFAULT_LOCALE,
   NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL || undefined,
-  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || undefined,
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: publishableKey(),
   NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY: process.env.NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY || undefined,
   NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID: process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID || undefined,
 });

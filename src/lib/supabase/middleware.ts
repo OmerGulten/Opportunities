@@ -1,6 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+import { publishableKey } from "@/lib/config/env";
+
 /** Paths that require an authenticated session. */
 const PROTECTED_PREFIXES = ["/dashboard", "/scans", "/opportunities", "/businesses", "/pipeline", "/messages", "/templates", "/analytics", "/settings", "/onboarding", "/admin"];
 /** Auth pages: redirect to the app when already signed in. */
@@ -22,7 +24,7 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
   let supabaseResponse = NextResponse.next({ request });
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  const key = publishableKey();
   if (!url || !key) {
     // Supabase not configured: let pages render their own "not configured" notice.
     return supabaseResponse;
