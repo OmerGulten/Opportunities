@@ -10,7 +10,7 @@ import { buildPricingTable } from "@/lib/credits/pricing";
 import { getCreditService } from "@/lib/credits/server";
 import { listCreditPricingRules } from "@/lib/db/reference";
 import { getAISettings } from "@/lib/db/settings";
-import { InsufficientCreditsError, NotFoundError, ValidationError, toAppError } from "@/lib/errors";
+import { NotFoundError, ValidationError, toAppError } from "@/lib/errors";
 import { logger } from "@/lib/logging";
 import { generateWithGuard } from "@/lib/providers/ai";
 import { getAIProvider } from "@/lib/providers/registry";
@@ -97,10 +97,47 @@ export async function generateMessage(ctx: WorkspaceContext, request: GenerateMe
   const generationId = randomUUID();
   const started = Date.now();
 
+  // Billing is settled around the provider call, not after it.
+  //
+  // This used to charge once the draft existed and swallow any failure that was
+  // not InsufficientCreditsError, so a database or ledger outage produced a
+  // free generation that we had already paid OpenAI for. Holding the credits
+  // first means an unavailable ledger stops the work instead of giving it away,
+  // and the hold is released if the provider fails. If the final consume fails
+  // the request fails too: a stranded reservation is visible and reconcilable,
+  // an unbilled generation is not.
+  const pricing = buildPricingTable(await listCreditPricingRules(ctx.supabase));
+  const price = pricing.ai_message;
+  const credits = getCreditService();
+  const billingReference = { workspaceId: ctx.workspace.id, referenceType: REFERENCE_TYPES.message, referenceId: generationId };
+
+  if (price > 0) {
+    await credits.reserve({
+      ...billingReference,
+      amount: price,
+      idempotencyKey: creditKeys.aiMessageReserve(generationId),
+      metadata: { businessId: request.businessId, channel: request.channel },
+      actorId: ctx.user.id,
+    });
+  }
+
   let generated: Awaited<ReturnType<typeof generateWithGuard>>;
   try {
     generated = await generateWithGuard(provider, input, { maxAttempts: 2 });
   } catch (err) {
+    if (price > 0) {
+      // Best effort by necessity: the generation failure is the error the caller
+      // needs to see, and a held reservation is recoverable. It is logged so a
+      // stuck hold can be found, and the fixed key keeps a retry idempotent.
+      await credits
+        .releaseReservation({ ...billingReference, idempotencyKey: creditKeys.aiMessageRelease(generationId), actorId: ctx.user.id })
+        .catch((releaseError: unknown) => {
+          logger.error("ai_message_reservation_release_failed", {
+            generationId,
+            error: releaseError instanceof Error ? releaseError.message : String(releaseError),
+          });
+        });
+    }
     await recordGeneration(ctx, {
       generationId,
       businessId: request.businessId,
@@ -116,25 +153,19 @@ export async function generateMessage(ctx: WorkspaceContext, request: GenerateMe
     throw err;
   }
 
-  // Bill only a successful generation, and only once per generation id.
-  const pricing = buildPricingTable(await listCreditPricingRules(ctx.supabase));
+  // The draft exists; convert the hold into a charge. A failure here throws:
+  // returning the draft anyway is precisely the free-operation path this
+  // replaced. The reservation survives for reconciliation.
   let creditsConsumed = 0;
-  if (pricing.ai_message > 0) {
-    try {
-      await getCreditService().consume({
-        workspaceId: ctx.workspace.id,
-        amount: pricing.ai_message,
-        referenceType: REFERENCE_TYPES.message,
-        referenceId: generationId,
-        idempotencyKey: creditKeys.aiMessage(generationId),
-        metadata: { businessId: request.businessId, channel: request.channel },
-        actorId: ctx.user.id,
-      });
-      creditsConsumed = pricing.ai_message;
-    } catch (err) {
-      if (err instanceof InsufficientCreditsError) throw err;
-      logger.warn("ai_message_credit_consume_failed", { generationId, error: err instanceof Error ? err.message : String(err) });
-    }
+  if (price > 0) {
+    await credits.consume({
+      ...billingReference,
+      amount: price,
+      idempotencyKey: creditKeys.aiMessage(generationId),
+      metadata: { businessId: request.businessId, channel: request.channel },
+      actorId: ctx.user.id,
+    });
+    creditsConsumed = price;
   }
 
   await recordGeneration(ctx, {

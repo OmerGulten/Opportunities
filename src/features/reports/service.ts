@@ -8,7 +8,7 @@ import { buildPricingTable } from "@/lib/credits/pricing";
 import { getCreditService } from "@/lib/credits/server";
 import { listCreditPricingRules } from "@/lib/db/reference";
 import { getFeatureFlags } from "@/lib/db/settings";
-import { FeatureDisabledError, InsufficientCreditsError, NotFoundError, toAppError } from "@/lib/errors";
+import { FeatureDisabledError, NotFoundError, toAppError } from "@/lib/errors";
 import { getT } from "@/lib/i18n";
 import { logger } from "@/lib/logging";
 import { getPolicy } from "@/lib/providers/policy";
@@ -86,12 +86,18 @@ export async function createReport(ctx: WorkspaceContext, request: CreateReportR
       });
       creditsConsumed = pricing.report;
     } catch (err) {
-      if (err instanceof InsufficientCreditsError) {
-        // Roll the report back rather than handing out an unpaid link.
-        await ctx.supabase.from("public_reports").delete().eq("id", report.id);
-        throw err;
+      // Every billing failure rolls the report back, not only an insufficient
+      // balance. A ledger or database outage used to be logged and stepped over,
+      // which left a live, shareable, unpaid report link -- the same free
+      // operation as an unpaid draft, with a URL attached. The link must not
+      // outlive the charge for it.
+      const rollback = await ctx.supabase.from("public_reports").delete().eq("id", report.id);
+      if (rollback.error) {
+        // The report exists and is unbilled: say so loudly, and still fail the
+        // request so the caller never receives a link for it.
+        logger.error("report_rollback_failed", { reportId: report.id, error: rollback.error.message });
       }
-      logger.warn("report_credit_consume_failed", { reportId: report.id, error: err instanceof Error ? err.message : String(err) });
+      throw toAppError(err, "Report could not be billed");
     }
   }
 

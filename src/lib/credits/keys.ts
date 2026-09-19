@@ -26,6 +26,10 @@ export const creditKeys = {
   scanRelease: (scanId: string): string => `scan:${scanId}:release`,
   /** One AI outreach generation. */
   aiMessage: (generationId: string): string => `message:${generationId}`,
+  /** Held before the provider is called, so a billing outage cannot yield a free generation. */
+  aiMessageReserve: (generationId: string): string => `message:${generationId}:reserve`,
+  /** Returns the hold when generation fails; fixed key, so a retry cannot refund twice. */
+  aiMessageRelease: (generationId: string): string => `message:${generationId}:release`,
   /** One public report creation. */
   report: (reportId: string): string => `report:${reportId}`,
   /** Competitor benchmark for a business within a scan (or another run identifier). */
