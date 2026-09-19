@@ -1,0 +1,73 @@
+####
+# Gitleaks configuration for OpportunityOS.
+#
+# The repository is public, so a committed credential is exposed the moment it
+# is pushed. GitHub push protection covers the well-known provider formats
+# (Google, OpenAI, Supabase); the rules below add the shapes that are specific
+# to this project and that no partner pattern recognises.
+#
+# Run locally:  gitleaks git --config gitleaks.toml --redact
+####
+
+title = "OpportunityOS"
+
+[extend]
+# Keep every upstream rule (Google API keys, OpenAI, JWTs, private keys, ...)
+# and add to them rather than replacing them.
+useDefault = true
+
+# ---------------------------------------------------------------------------
+# Project-specific rules
+# ---------------------------------------------------------------------------
+
+[[rules]]
+id = "opportunityos-internal-api-secret"
+description = "INTERNAL_API_SECRET (bare hex, no provider prefix to match on)"
+# Anchored on the variable name: the value alone is indistinguishable from a
+# commit SHA or any other hex digest, so matching entropy would be all noise.
+regex = '''(?i)INTERNAL_API_SECRET\s*[:=]\s*["']?[0-9a-f]{32,}'''
+tags = ["secret", "opportunityos"]
+
+[[rules]]
+id = "supabase-secret-key"
+description = "Supabase secret/service-role key (sb_secret_ format)"
+regex = '''sb_secret_[A-Za-z0-9_-]{20,}'''
+tags = ["secret", "supabase"]
+
+[[rules]]
+id = "supabase-service-role-assignment"
+description = "Service-role key assigned to a variable (legacy JWT format)"
+regex = '''(?i)(SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_KEY)\s*[:=]\s*["']?eyJ[A-Za-z0-9_-]{20,}'''
+tags = ["secret", "supabase"]
+
+[[rules]]
+id = "postgres-url-with-password"
+description = "Postgres connection string carrying an inline password"
+regex = '''postgres(?:ql)?://[^\s:@/]+:[^\s@/]+@[^\s/]+'''
+tags = ["secret", "database"]
+
+# ---------------------------------------------------------------------------
+# Allowlist
+# ---------------------------------------------------------------------------
+
+[allowlist]
+description = "Paths and literals that look like secrets but are not"
+
+paths = [
+  '''package-lock\.json''',
+  '''\.workflow-data/''',
+  # Demo providers and fixtures ship deliberately fake credentials so the app
+  # runs without real ones; see docs/provider-policy.md.
+  '''src/lib/providers/.*/demo/.*''',
+  '''src/lib/providers/ai/fixtures\.ts''',
+  '''.*\.test\.ts''',
+]
+
+regexes = [
+  # Google's public sample map id, used as the fallback in components/map/config.ts.
+  '''DEMO_MAP_ID''',
+  # Placeholder values in documentation and .env.example.
+  '''(?i)(your[_-]?key|paste[_-]?key|replace[_-]?me|xxx+|<[a-z_]+>)''',
+  # Local Supabase's fixed development keys are published in Supabase's own docs.
+  '''postgres(?:ql)?://postgres:postgres@(localhost|127\.0\.0\.1)''',
+]
