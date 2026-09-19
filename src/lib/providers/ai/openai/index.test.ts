@@ -4,7 +4,16 @@ import { AIInvalidOutputError, AIUnavailableError, ProviderError } from "@/lib/e
 import { drainPendingProviderCalls } from "@/lib/providers/call-log";
 
 import { sampleAnalysisInput, sampleMessageInput } from "../fixtures";
-import { createOpenAIProvider, estimateCostUsd, isReasoningModel, mapOpenAIError, type OpenAIResponsesRequest, type OpenAIResponsesResult } from "./index";
+import {
+  DEFAULT_VISIBLE_TOKENS,
+  REASONING_HEADROOM_TOKENS,
+  createOpenAIProvider,
+  estimateCostUsd,
+  isReasoningModel,
+  mapOpenAIError,
+  type OpenAIResponsesRequest,
+  type OpenAIResponsesResult,
+} from "./index";
 
 process.env.LOG_LEVEL = "error";
 
@@ -66,7 +75,10 @@ describe("createOpenAIProvider", () => {
     const request = calls[0]!;
     expect(request.model).toBe("gpt-5-mini");
     expect(request.temperature).toBeUndefined(); // reasoning model
-    expect(request.max_output_tokens).toBe(700);
+    // gpt-5-mini reasons before answering and bills that against the ceiling,
+    // so the request carries the draft budget plus headroom. See the
+    // "output token budget" tests below.
+    expect(request.max_output_tokens).toBe(DEFAULT_VISIBLE_TOKENS + REASONING_HEADROOM_TOKENS);
     expect(request.text.format).toMatchObject({ type: "json_schema", name: "outreach_message", strict: true });
     expect(request.text.format.schema.additionalProperties).toBe(false);
     expect(request.instructions).toContain("NEVER invent");
@@ -160,5 +172,79 @@ describe("createOpenAIProvider", () => {
     expect(estimateCostUsd("gpt-5-mini", 0, 1_000_000)).toBeCloseTo(2, 6);
     expect(estimateCostUsd("unknown-model", 1_000_000, 1_000_000)).toBeCloseTo(5, 6);
     expect(estimateCostUsd("gpt-5-mini", null, null)).toBe(0);
+  });
+});
+
+describe("output token budget", () => {
+  beforeEach(() => {
+    drainPendingProviderCalls();
+  });
+
+  /**
+   * Regression for a live failure: every draft came back "AI output was cut off
+   * before completion". gpt-5-mini spends reasoning tokens before emitting any
+   * JSON, and those count against max_output_tokens, so sending the 700-token
+   * draft budget as the request ceiling left nothing for the answer.
+   */
+  it("grants a reasoning model headroom above the draft budget", async () => {
+    const { client, calls } = fakeClient(() => ({
+      output_text: JSON.stringify(validOutput),
+      usage: { input_tokens: 100, output_tokens: 50 },
+      status: "completed",
+    }));
+    const provider = createOpenAIProvider({ apiKey: "sk-test", model: "gpt-5-mini", client });
+    await provider.generateMessage(sampleMessageInput());
+
+    expect(calls[0]?.max_output_tokens).toBe(DEFAULT_VISIBLE_TOKENS + REASONING_HEADROOM_TOKENS);
+  });
+
+  it("gives a non-reasoning model the draft budget unchanged", async () => {
+    const { client, calls } = fakeClient(() => ({
+      output_text: JSON.stringify(validOutput),
+      usage: { input_tokens: 100, output_tokens: 50 },
+      status: "completed",
+    }));
+    const provider = createOpenAIProvider({ apiKey: "sk-test", model: "gpt-4o-mini", client });
+    await provider.generateMessage(sampleMessageInput());
+
+    expect(calls[0]?.max_output_tokens).toBe(DEFAULT_VISIBLE_TOKENS);
+  });
+
+  it("keeps asking the model for the draft length, not the inflated ceiling", async () => {
+    // The headroom must not leak into the prompt: it would licence a draft five
+    // times longer than the channel allows.
+    const { client, calls } = fakeClient(() => ({
+      output_text: JSON.stringify(validOutput),
+      usage: { input_tokens: 100, output_tokens: 50 },
+      status: "completed",
+    }));
+    const provider = createOpenAIProvider({ apiKey: "sk-test", model: "gpt-5-mini", client });
+    await provider.generateMessage(sampleMessageInput());
+
+    expect(calls[0]?.instructions).toContain(`${DEFAULT_VISIBLE_TOKENS} tokens`);
+    expect(calls[0]?.instructions).not.toContain(`${DEFAULT_VISIBLE_TOKENS + REASONING_HEADROOM_TOKENS} tokens`);
+  });
+
+  it("applies headroom on top of a caller-supplied draft budget", async () => {
+    const { client, calls } = fakeClient(() => ({
+      output_text: JSON.stringify(validOutput),
+      usage: { input_tokens: 100, output_tokens: 50 },
+      status: "completed",
+    }));
+    const provider = createOpenAIProvider({ apiKey: "sk-test", model: "gpt-5-mini", maxOutputTokens: 400, client });
+    await provider.generateMessage(sampleMessageInput());
+
+    expect(calls[0]?.max_output_tokens).toBe(400 + REASONING_HEADROOM_TOKENS);
+    expect(calls[0]?.instructions).toContain("400 tokens");
+  });
+
+  it("still reports a truncated response, naming both budgets", async () => {
+    const { client } = fakeClient(() => ({ output_text: '{"subject":', status: "incomplete", incomplete_details: { reason: "max_output_tokens" } }));
+    const provider = createOpenAIProvider({ apiKey: "sk-test", model: "gpt-5-mini", client });
+
+    await expect(provider.generateMessage(sampleMessageInput())).rejects.toMatchObject({
+      code: "ai_invalid_output",
+      details: { reason: "max_output_tokens", responseTokens: DEFAULT_VISIBLE_TOKENS + REASONING_HEADROOM_TOKENS, visibleTokens: DEFAULT_VISIBLE_TOKENS },
+    });
   });
 });

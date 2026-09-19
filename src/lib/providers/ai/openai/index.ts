@@ -55,7 +55,12 @@ export interface OpenAIResponsesClient {
 export interface OpenAIProviderOptions {
   apiKey: string;
   model: string;
-  /** Default 700; matches AISettings.max_output_tokens. */
+  /**
+   * Draft-length budget in tokens (default 700; matches
+   * AISettings.max_output_tokens). This is what the prompt asks the model to
+   * stay within -- not the request's max_output_tokens, which additionally
+   * carries REASONING_HEADROOM_TOKENS on a reasoning model.
+   */
   maxOutputTokens?: number;
   /** Default 0.7; ignored for reasoning models (see isReasoningModel). */
   temperature?: number;
@@ -75,6 +80,18 @@ export interface OpenAIProviderOptions {
 export function isReasoningModel(model: string): boolean {
   return /^(gpt-5|o\d)/i.test(model);
 }
+
+/** Draft-length budget: what the prompt asks the model to stay within. */
+export const DEFAULT_VISIBLE_TOKENS = 700;
+
+/**
+ * Extra `max_output_tokens` granted to a reasoning model for the thinking it
+ * does before answering. Reasoning is not returned but is billed and counted,
+ * so without headroom the response completes as `incomplete` with no output.
+ * Generous on purpose: unused tokens cost nothing, a truncated answer costs the
+ * whole call.
+ */
+export const REASONING_HEADROOM_TOKENS = 3000;
 
 /**
  * Rough list prices in USD per million tokens, used ONLY to populate
@@ -195,7 +212,17 @@ function extractRefusal(output: unknown): string | null {
 
 export function createOpenAIProvider(options: OpenAIProviderOptions): AIProvider {
   const model = options.model;
-  const maxOutputTokens = options.maxOutputTokens ?? 700;
+  // Two budgets, because one number was answering two different questions.
+  //
+  // `visibleTokens` is what the prompt asks the model to stay within, and it
+  // sets how long a draft reads. `responseTokens` is what the API is allowed to
+  // spend in total -- and on a reasoning model that includes the hidden
+  // reasoning tokens, which are billed and counted before a single character of
+  // JSON is emitted. Sending the draft-length budget as max_output_tokens meant
+  // the reasoning ate the whole allowance and every response came back
+  // `incomplete`, which the caller saw as "AI output could not be validated".
+  const visibleTokens = options.maxOutputTokens ?? DEFAULT_VISIBLE_TOKENS;
+  const responseTokens = isReasoningModel(model) ? visibleTokens + REASONING_HEADROOM_TOKENS : visibleTokens;
   const temperature = options.temperature ?? 0.7;
   const timeoutMs = options.timeoutMs ?? 45_000;
   const client: OpenAIResponsesClient =
@@ -215,7 +242,7 @@ export function createOpenAIProvider(options: OpenAIProviderOptions): AIProvider
       model,
       instructions: prompt.instructions,
       input: prompt.input,
-      max_output_tokens: maxOutputTokens,
+      max_output_tokens: responseTokens,
       text: { format: { type: "json_schema", name: prompt.schemaName, schema, strict: true } },
     };
     if (!isReasoningModel(model)) request.temperature = temperature;
@@ -246,7 +273,7 @@ export function createOpenAIProvider(options: OpenAIProviderOptions): AIProvider
 
         if (response.status === "incomplete") {
           const reason = response.incomplete_details?.reason ?? "unknown";
-          throw new AIInvalidOutputError("AI output was cut off before completion", { details: { reason, maxOutputTokens } });
+          throw new AIInvalidOutputError("AI output was cut off before completion", { details: { reason, responseTokens, visibleTokens } });
         }
         if (response.status === "failed" || response.status === "cancelled") {
           throw new AIUnavailableError(`OpenAI response ${response.status}`, { retryable: true, details: { status: response.status } });
@@ -279,7 +306,7 @@ export function createOpenAIProvider(options: OpenAIProviderOptions): AIProvider
     isDemo: false,
 
     async generateMessage(input: GenerateMessageInput): Promise<AIResult<GeneratedMessage>> {
-      const prompt = buildMessagePrompt(input, { maxOutputTokens });
+      const prompt = buildMessagePrompt(input, { maxOutputTokens: visibleTokens });
       const result = await run(
         "generate_message",
         prompt,
@@ -292,7 +319,7 @@ export function createOpenAIProvider(options: OpenAIProviderOptions): AIProvider
     },
 
     async analyzeOpportunity(input: AnalyzeOpportunityInput): Promise<AIResult<OpportunityAnalysis>> {
-      const prompt = buildAnalysisPrompt(input, { maxOutputTokens });
+      const prompt = buildAnalysisPrompt(input, { maxOutputTokens: visibleTokens });
       return run("analyze_opportunity", prompt, analysisSchema, parseOpportunityAnalysis, {
         locale: input.locale,
         serviceCount: input.services.length,
