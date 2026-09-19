@@ -9,7 +9,7 @@ import { creditKeys, REFERENCE_TYPES } from "@/lib/credits/keys";
 import { buildPricingTable } from "@/lib/credits/pricing";
 import { getCreditService } from "@/lib/credits/server";
 import { listCreditPricingRules } from "@/lib/db/reference";
-import { getAISettings } from "@/lib/db/settings";
+import { getAISettings, getFeatureFlags } from "@/lib/db/settings";
 import { NotFoundError, ValidationError, toAppError } from "@/lib/errors";
 import { logger } from "@/lib/logging";
 import { generateWithGuard } from "@/lib/providers/ai";
@@ -18,6 +18,7 @@ import type { GenerateMessageInput, GeneratedMessage } from "@/types/ai";
 import type { MessageRow, MessageTemplateRow, ServiceRow } from "@/types/db";
 
 import { loadBusinessFacts, loadOfferingFacts } from "./facts";
+import { redactProviderContent } from "./provider-content";
 import { buildVariableContext, resolveTemplate } from "./variables";
 import type { GenerateMessageRequest, SaveMessageRequest, UpdateMessageStatusRequest } from "./schemas";
 
@@ -81,6 +82,11 @@ export async function generateMessage(ctx: WorkspaceContext, request: GenerateMe
     templateSubject = template.subject ? resolveTemplate(template.subject, context).text : null;
   }
 
+  // Google-derived Places content only reaches the model when an operator has
+  // deliberately enabled it; see ./provider-content.ts for why the default is off.
+  const aiFlags = await getFeatureFlags();
+  const businessFacts = aiFlags.ai_provider_content ? bundle.facts : redactProviderContent(bundle.facts);
+
   const input: GenerateMessageInput = {
     locale,
     channel: request.channel,
@@ -88,7 +94,7 @@ export async function generateMessage(ctx: WorkspaceContext, request: GenerateMe
     length: request.length ?? "medium",
     serviceKey: service?.key ?? "general",
     serviceLabel: service ? (locale === "en" ? service.name_en : service.name_tr) : "",
-    business: bundle.facts,
+    business: businessFacts,
     sender: bundle.sender,
     offering,
     templateBody,

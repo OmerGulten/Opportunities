@@ -42,6 +42,8 @@ export interface FeatureFlags {
   export_provider_content: boolean;
   public_reports: boolean;
   api_keys: boolean;
+  /** Whether Google-derived Places content may be included in AI prompts. */
+  ai_provider_content: boolean;
 }
 
 const DEFAULT_FLAGS: FeatureFlags = {
@@ -57,6 +59,15 @@ const DEFAULT_FLAGS: FeatureFlags = {
   // credential that grants nothing and implies an access model the application
   // does not implement. Turn this on in the same change that adds verification.
   api_keys: false,
+  // Off by default. Google Maps Platform Service Specific Terms prohibit using
+  // Google Maps Content to "train, test, validate or fine-tune" machine learning
+  // models. Sending Places-derived facts to OpenAI for inference is not training,
+  // and OpenAI states API data is not used for training by default -- but whether
+  // passing Google Maps Content to a third-party LLM is permitted under the
+  // Agreement is an unresolved contractual question, not a settled one. The
+  // system therefore does not do it unless an operator turns it on deliberately,
+  // having read the terms for their own billing region.
+  ai_provider_content: false,
 };
 
 export async function getFeatureFlags(): Promise<FeatureFlags> {
