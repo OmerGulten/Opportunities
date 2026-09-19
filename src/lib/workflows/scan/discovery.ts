@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { FatalError, RetryableError } from "workflow";
 
-import { canonicalFingerprint, dedupePlaces, normalizeBusinessName } from "@/features/businesses/dedupe";
+import { dedupePlaces } from "@/features/businesses/dedupe";
 import { getScanSettings } from "@/lib/db/settings";
 import { AppError } from "@/lib/errors";
 import { getPlaceProvider } from "@/lib/providers/registry";
@@ -11,6 +11,7 @@ import type { GeoPoint, GeoPolygon } from "@/types/common";
 import type { CategoryProviderMappingRow, ScanRow } from "@/types/db";
 import type { PlaceSummary } from "@/types/places";
 
+import { fingerprintsFromSnapshots } from "./fingerprints";
 import { adminClient, appendScanEvent, bumpScanCounters, claimScanJob, errorCodeOf, errorMessageOf, finishScanJob, isScanCancelled, stepLogger } from "./shared";
 
 /** One provider query: a coverage cell crossed with a category. */
@@ -252,16 +253,22 @@ export async function dedupeScanBusinesses(scanId: string): Promise<DedupeResult
 
   const { data: rows } = await client
     .from("scan_businesses")
-    .select("id, business_id, discovered_at, businesses(canonical_fingerprint)")
+    .select("id, business_id, discovered_at")
     .eq("scan_id", scanId)
     .eq("audit_status", "pending")
     .order("discovered_at", { ascending: true })
-    .returns<Array<{ id: string; business_id: string; discovered_at: string; businesses: { canonical_fingerprint: string } | null }>>();
+    .returns<Array<{ id: string; business_id: string; discovered_at: string }>>();
+
+  const members = rows ?? [];
+  const fingerprints = await fingerprintsFromSnapshots(
+    client,
+    members.map((row) => row.business_id),
+  );
 
   const seen = new Set<string>();
   const duplicates: string[] = [];
-  for (const row of rows ?? []) {
-    const fingerprint = row.businesses?.canonical_fingerprint;
+  for (const row of members) {
+    const fingerprint = fingerprints.get(row.business_id);
     if (!fingerprint) continue;
     if (seen.has(fingerprint)) duplicates.push(row.id);
     else seen.add(fingerprint);
@@ -326,19 +333,11 @@ async function persistDiscoveredPlaces(
     workspace_id: input.workspaceId,
     provider: place.provider,
     provider_place_id: place.providerPlaceId,
-    // Google Places policy does not permit us to persist provider-derived
-    // business identity fields as a secondary database. The durable identity is
-    // provider + place ID; fingerprints remain an in-memory discovery concern.
-    normalized_name: place.provider === "google_places" ? null : normalizeBusinessName(place.displayName),
-    canonical_fingerprint:
-      place.provider === "google_places"
-        ? null
-        : canonicalFingerprint({
-            name: place.displayName,
-            address: place.formattedAddress ?? "",
-            lat: place.location?.lat ?? 0,
-            lng: place.location?.lng ?? 0,
-          }),
+    // normalized_name and canonical_fingerprint are deliberately left unset.
+    // `businesses` never expires, so provider-derived identity here would be an
+    // indefinite secondary copy of Places content. The durable identity is
+    // provider + place id; matching material lives in the snapshot cache, which
+    // expires, and dedupe derives its fingerprint from there at scan time.
     primary_category_id: input.categoryId,
     first_scan_id: input.scanId,
     last_seen_at: now.toISOString(),
