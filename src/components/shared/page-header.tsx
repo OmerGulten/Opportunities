@@ -1,6 +1,6 @@
 import { cn } from "cn";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 
@@ -29,16 +29,20 @@ export function PageHeader({ title, description, actions, breadcrumbs, className
             {breadcrumbs.map((crumb, index) => {
               const isLast = index === breadcrumbs.length - 1;
               return (
-                <BreadcrumbItem key={`${crumb.label}-${index}`}>
-                  {crumb.href && !isLast ? (
-                    <>
+                // The separator is a sibling of the item, not a child: both render
+                // <li>, and an <li> inside an <li> is invalid. The parser closes the
+                // outer one, so the server's HTML and the client's DOM disagree and
+                // hydration fails for the whole tree.
+                <Fragment key={`${crumb.label}-${index}`}>
+                  <BreadcrumbItem>
+                    {crumb.href && !isLast ? (
                       <BreadcrumbLink render={<Link href={crumb.href} />}>{crumb.label}</BreadcrumbLink>
-                      <BreadcrumbSeparator />
-                    </>
-                  ) : (
-                    <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
-                  )}
-                </BreadcrumbItem>
+                    ) : (
+                      <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
+                    )}
+                  </BreadcrumbItem>
+                  {isLast ? null : <BreadcrumbSeparator />}
+                </Fragment>
               );
             })}
           </BreadcrumbList>
