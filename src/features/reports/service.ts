@@ -12,7 +12,7 @@ import { FeatureDisabledError, NotFoundError, toAppError } from "@/lib/errors";
 import { getT } from "@/lib/i18n";
 import { logger } from "@/lib/logging";
 import { getPolicy } from "@/lib/providers/policy";
-import { generateSecureToken } from "@/lib/security/tokens";
+import { generateSecureToken, hashToken } from "@/lib/security/tokens";
 import type { ConfidenceLevel, EvidenceType, Locale, Json } from "@/types/common";
 import type {
   AuditFindingRow,
@@ -59,7 +59,9 @@ export async function createReport(ctx: WorkspaceContext, request: CreateReportR
       workspace_id: ctx.workspace.id,
       business_id: request.businessId,
       opportunity_id: snapshot.opportunityId,
-      token,
+      // Only the digest is persisted; the secret lives in the URL we return.
+      token_hash: hashToken(token),
+      token_prefix: token.slice(0, 12),
       title: request.title?.trim() || snapshot.snapshot.business.name,
       locale,
       content_snapshot: snapshot.snapshot as unknown as Record<string, Json>,

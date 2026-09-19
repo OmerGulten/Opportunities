@@ -1,4 +1,5 @@
 import "server-only";
+import { hashToken } from "@/lib/security/tokens";
 
 import { logger } from "@/lib/logging";
 import { createAdminClient, isAdminClientConfigured } from "@/lib/supabase/admin";
@@ -38,7 +39,7 @@ export async function getPublicReport(rawToken: string): Promise<PublicReportLoo
   const { data, error } = await client
     .from("public_reports")
     .select("title, content_snapshot, branding, created_at, expires_at, revoked_at")
-    .eq("token", parsed.data)
+    .eq("token_hash", hashToken(parsed.data))
     .maybeSingle<Pick<PublicReportRow, "title" | "content_snapshot" | "branding" | "created_at" | "expires_at" | "revoked_at">>();
 
   if (error) {
@@ -50,7 +51,7 @@ export async function getPublicReport(rawToken: string): Promise<PublicReportLoo
   if (data.expires_at && new Date(data.expires_at).getTime() <= Date.now()) return { status: "expired" };
 
   // View counting is best effort and must never block rendering.
-  void client.rpc("touch_public_report", { p_token: parsed.data }).then(
+  void client.rpc("touch_public_report", { p_token_hash: hashToken(parsed.data) }).then(
     () => undefined,
     (err: unknown) => logger.warn("public_report_touch_failed", { error: String(err) }),
   );

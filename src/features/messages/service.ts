@@ -4,7 +4,7 @@ import { createHash, randomUUID } from "node:crypto";
 
 import { recordActivity } from "@/lib/activity";
 import type { WorkspaceContext } from "@/lib/auth/context";
-import { appUrl } from "@/lib/config/env";
+
 import { creditKeys, REFERENCE_TYPES } from "@/lib/credits/keys";
 import { buildPricingTable } from "@/lib/credits/pricing";
 import { getCreditService } from "@/lib/credits/server";
@@ -15,7 +15,7 @@ import { logger } from "@/lib/logging";
 import { generateWithGuard } from "@/lib/providers/ai";
 import { getAIProvider } from "@/lib/providers/registry";
 import type { GenerateMessageInput, GeneratedMessage } from "@/types/ai";
-import type { MessageRow, MessageTemplateRow, PublicReportRow, ServiceRow } from "@/types/db";
+import type { MessageRow, MessageTemplateRow, ServiceRow } from "@/types/db";
 
 import { loadBusinessFacts, loadOfferingFacts } from "./facts";
 import { buildVariableContext, resolveTemplate } from "./variables";
@@ -54,7 +54,12 @@ export async function generateMessage(ctx: WorkspaceContext, request: GenerateMe
   const service = await loadService(ctx, request.serviceId);
   const offering = await loadOfferingFacts(ctx.supabase, ctx.workspace.id, request.serviceId ?? null);
   const template = request.templateId ? await loadTemplate(ctx, request.templateId) : null;
-  const reportLink = request.includeReportLink ? await activeReportLink(ctx, request.businessId) : null;
+  // No link can be attached automatically any more. public_reports stores only
+  // the SHA-256 digest of its token, so an existing report URL genuinely cannot
+  // be reconstructed -- which is the point of that change. A report URL is shown
+  // once, at creation. The wizard already handles null by reporting that no
+  // published link is available and leaving the option inert.
+  const reportLink: string | null = null;
 
   // A template is a starting structure, not a source of facts: it is resolved
   // with verified values first, and unknown variables are removed rather than
@@ -307,21 +312,6 @@ async function loadTemplate(ctx: WorkspaceContext, templateId: string): Promise<
   return data;
 }
 
-/** Returns the public link for a live report, if the user asked to include one. */
-async function activeReportLink(ctx: WorkspaceContext, businessId: string): Promise<string | null> {
-  const { data } = await ctx.supabase
-    .from("public_reports")
-    .select("token, expires_at, revoked_at")
-    .eq("workspace_id", ctx.workspace.id)
-    .eq("business_id", businessId)
-    .is("revoked_at", null)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle<Pick<PublicReportRow, "token" | "expires_at" | "revoked_at">>();
-  if (!data) return null;
-  if (data.expires_at && new Date(data.expires_at).getTime() <= Date.now()) return null;
-  return appUrl(`/report/${data.token}`);
-}
 
 /** Stable fingerprint of the facts a draft was based on, for auditability. */
 function hashFacts(input: GenerateMessageInput): string {

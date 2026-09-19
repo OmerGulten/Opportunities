@@ -590,7 +590,10 @@ export interface PublicReportRow {
   workspace_id: string;
   business_id: string;
   opportunity_id: string | null;
-  token: string;
+  /** SHA-256 hex digest. The token itself is never stored; it lives in the URL. */
+  token_hash: string;
+  /** Non-secret leading characters, for identifying a link in a listing. */
+  token_prefix: string | null;
   title: string;
   locale: Locale;
   content_snapshot: Record<string, Json>;

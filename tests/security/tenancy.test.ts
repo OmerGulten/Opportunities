@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -338,5 +339,56 @@ suite("security definer functions check their caller", () => {
       const { error } = await asA.rpc(fn, {});
       expect(error, `${fn} must not be callable by authenticated`).not.toBeNull();
     }
+  });
+});
+
+suite("public report tokens are not stored in plaintext", () => {
+  it("the plaintext column no longer exists", async () => {
+    // Asserted against the live schema, not the migration text: the point is
+    // what the database actually holds.
+    const { error } = await admin.from("public_reports").select("token").limit(1);
+    expect(error).not.toBeNull();
+    expect(`${error?.message} ${error?.code}`).toMatch(/token|42703|does not exist/i);
+  });
+
+  it("a stored report reveals only a digest and a non-secret prefix", async () => {
+    const token = randomBytes(32).toString("base64url");
+    const digest = createHash("sha256").update(token, "utf8").digest("hex");
+    const ins = await admin
+      .from("public_reports")
+      .insert({
+        workspace_id: A.workspaceId,
+        business_id: A.businessId,
+        token_hash: digest,
+        token_prefix: token.slice(0, 12),
+        title: "digest probe",
+        locale: "tr",
+        content_snapshot: {},
+        branding: {},
+        expires_at: new Date(Date.now() + 86_400_000).toISOString(),
+      })
+      .select("id, token_hash, token_prefix")
+      .single<{ id: string; token_hash: string; token_prefix: string }>();
+    expect(ins.error).toBeNull();
+
+    // Everything persisted, serialised: the secret must not appear anywhere.
+    const row = await admin.from("public_reports").select("*").eq("id", ins.data!.id).single();
+    expect(JSON.stringify(row.data)).not.toContain(token);
+    expect(ins.data?.token_hash).toBe(digest);
+    expect(token.startsWith(ins.data!.token_prefix)).toBe(true);
+
+    // The digest resolves the row; a different token does not.
+    const hit = await admin.from("public_reports").select("id").eq("token_hash", digest).maybeSingle<{ id: string }>();
+    expect(hit.data?.id).toBe(ins.data?.id);
+    const wrong = createHash("sha256").update(randomBytes(32).toString("base64url"), "utf8").digest("hex");
+    const miss = await admin.from("public_reports").select("id").eq("token_hash", wrong).maybeSingle();
+    expect(miss.data).toBeNull();
+
+    await admin.from("public_reports").delete().eq("id", ins.data!.id);
+  });
+
+  it("the view counter is not callable from a session", async () => {
+    const { error } = await asA.rpc("touch_public_report", { p_token_hash: "x".repeat(64) });
+    expect(error).not.toBeNull();
   });
 });

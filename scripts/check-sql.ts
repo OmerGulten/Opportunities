@@ -128,11 +128,29 @@ function main(): void {
     }
   }
 
-  // ---- columns added later --------------------------------------------
-  for (const m of combined.matchAll(/alter\s+table\s+(?:public\.)?([a-z_][a-z0-9_]*)\s+add\s+column\s+(?:if\s+not\s+exists\s+)?([a-z_][a-z0-9_]*)/gi)) {
-    const table = tables.get(m[1]);
-    if (!table) problem(`alter table adds a column to unknown table "${m[1]}"`);
-    else table.columns.add(m[2].toLowerCase());
+  // ---- columns added and removed later ---------------------------------
+  //
+  // One statement may carry several clauses:
+  //
+  //   alter table t add column a text, add column b text;
+  //   alter table t drop column c;
+  //
+  // Matching `alter table <t> add column <c>` directly only ever sees the first
+  // clause, so a second column stayed unknown and any index on it was reported
+  // as referencing a column that does not exist. The statement is taken whole,
+  // then every clause inside it is read.
+  for (const stmt of combined.matchAll(/alter\s+table\s+(?:public\.)?([a-z_][a-z0-9_]*)\s+([^;]*);/gi)) {
+    const table = tables.get(stmt[1].toLowerCase());
+    const body = stmt[2];
+    const added = [...body.matchAll(/\badd\s+column\s+(?:if\s+not\s+exists\s+)?([a-z_][a-z0-9_]*)/gi)];
+    const dropped = [...body.matchAll(/\bdrop\s+column\s+(?:if\s+exists\s+)?([a-z_][a-z0-9_]*)/gi)];
+    if (added.length === 0 && dropped.length === 0) continue;
+    if (!table) {
+      problem(`alter table changes columns on unknown table "${stmt[1]}"`);
+      continue;
+    }
+    for (const m of added) table.columns.add(m[1].toLowerCase());
+    for (const m of dropped) table.columns.delete(m[1].toLowerCase());
   }
 
   // ---- enums -----------------------------------------------------------
