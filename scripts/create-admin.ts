@@ -157,9 +157,10 @@ async function ensureWorkspace(client: SupabaseClient, userId: string, name: str
     return { id: membership.workspaces.id, created: false, name: membership.workspaces.name };
   }
 
-  // Reuse the same bootstrap the onboarding wizard uses: plan grant, default
-  // pipeline stages and enabled services all come with it.
-  const { data: plan } = await client.from("plans").select("id, key, monthly_credits").eq("is_default", true).maybeSingle<{ id: string; key: string; monthly_credits: number }>();
+  // Mirrors public.create_workspace_with_defaults(): that function reads
+  // auth.uid(), which a service-role script does not have, so the same rows are
+  // written here instead. Keep the two in step when either one changes.
+  const { data: plan } = await client.from("plans").select("id, key, monthly_credits").eq("is_default", true).maybeSingle<DefaultPlan>();
 
   let slug = slugify(name);
   for (let attempt = 0; attempt < 5; attempt += 1) {
@@ -170,13 +171,60 @@ async function ensureWorkspace(client: SupabaseClient, userId: string, name: str
       .select("id, name")
       .single<{ id: string; name: string }>();
     if (!error && workspace) {
-      await seedWorkspace(client, workspace.id, userId);
+      await seedWorkspace(client, workspace.id, userId, plan ?? null);
       return { id: workspace.id, created: true, name: workspace.name };
     }
     if (error && error.code !== "23505") throw error;
     slug = slugify(name);
   }
   throw new Error("Could not find a free workspace slug");
+}
+
+interface DefaultPlan {
+  id: string;
+  key: string;
+  monthly_credits: number;
+}
+
+/** `YYYY-MM`, matching formatGrantPeriod() and the SQL bootstrap's to_char(now(), 'YYYY-MM'). */
+function grantPeriod(date: Date): string {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+/**
+ * Subscription row plus the first period's credit grant.
+ *
+ * Without this a workspace looks complete but never appears in
+ * /api/internal/cron/monthly-grants, which selects on subscriptions.status —
+ * so it silently stops receiving its plan credits every month.
+ *
+ * `last_grant_period_start` is set to now and the grant reuses the cron's
+ * idempotency key (`grant:<workspace>:<YYYY-MM>`), so a cron run in the same
+ * month is a no-op rather than a second grant.
+ */
+async function seedSubscription(client: SupabaseClient, workspaceId: string, userId: string, plan: DefaultPlan): Promise<void> {
+  const now = new Date();
+  const subscription = await client.from("subscriptions").insert({
+    workspace_id: workspaceId,
+    plan_id: plan.id,
+    status: "active",
+    provider: "mock",
+    last_grant_period_start: now.toISOString(),
+  });
+  if (subscription.error) throw subscription.error;
+
+  if (plan.monthly_credits <= 0) return;
+  const { error } = await client.rpc("credit_apply_scoped", {
+    p_workspace: workspaceId,
+    p_type: "monthly_grant",
+    p_amount: plan.monthly_credits,
+    p_reference_type: "plan",
+    p_reference_id: plan.key,
+    p_idempotency_key: `grant:${workspaceId}:${grantPeriod(now)}`,
+    p_metadata: { plan: plan.key },
+    p_actor: userId,
+  });
+  if (error) throw error;
 }
 
 /**
@@ -197,7 +245,7 @@ const DEFAULT_STAGES = [
   { key: "lost", name: "Lost", color: "rose", sort_order: 70, is_won: false, is_lost: true, is_default: false },
 ] as const;
 
-async function seedWorkspace(client: SupabaseClient, workspaceId: string, userId: string): Promise<void> {
+async function seedWorkspace(client: SupabaseClient, workspaceId: string, userId: string, plan: DefaultPlan | null): Promise<void> {
   // Each step is checked: a silently swallowed failure here leaves a workspace
   // that looks fine until the pipeline turns out to have no stages.
   const member = await client.from("workspace_members").insert({ workspace_id: workspaceId, user_id: userId, role: "owner" });
@@ -205,6 +253,9 @@ async function seedWorkspace(client: SupabaseClient, workspaceId: string, userId
 
   const account = await client.from("credit_accounts").insert({ workspace_id: workspaceId }).select("id").maybeSingle();
   if (account.error && account.error.code !== "23505") throw account.error;
+
+  // After the credit account exists: the grant writes to it.
+  if (plan) await seedSubscription(client, workspaceId, userId, plan);
 
   const stages = await client.from("pipeline_stages").insert(DEFAULT_STAGES.map((stage) => ({ ...stage, workspace_id: workspaceId })));
   if (stages.error) throw stages.error;
@@ -223,6 +274,23 @@ async function seedWorkspace(client: SupabaseClient, workspaceId: string, userId
     .from("workspace_services")
     .insert(services.map((service) => ({ workspace_id: workspaceId, service_id: service.id, enabled: true, priority: service.sort_order })));
   if (workspaceServices.error) throw workspaceServices.error;
+}
+
+/** Repairs a workspace seeded before this script wrote a subscription row. */
+async function ensureSubscription(client: SupabaseClient, workspaceId: string, userId: string): Promise<string | null> {
+  const { data: existing } = await client
+    .from("subscriptions")
+    .select("id, plans(key)")
+    .eq("workspace_id", workspaceId)
+    .limit(1)
+    .maybeSingle<{ id: string; plans: { key: string } | null }>();
+  if (existing) return existing.plans?.key ?? null;
+
+  const { data: plan } = await client.from("plans").select("id, key, monthly_credits").eq("is_default", true).maybeSingle<DefaultPlan>();
+  if (!plan) return null;
+  await seedSubscription(client, workspaceId, userId, plan);
+  await client.from("workspaces").update({ plan_id: plan.id }).eq("id", workspaceId).is("plan_id", null);
+  return plan.key;
 }
 
 /** Repairs a workspace created before this script checked its own writes. */
@@ -250,6 +318,7 @@ async function main(): Promise<void> {
   const workspace = await ensureWorkspace(client, user.id, opts.workspaceName);
   // Idempotent repair for a workspace seeded before this script checked its writes.
   const stageCount = await ensureStages(client, workspace.id);
+  const planKey = await ensureSubscription(client, workspace.id, user.id);
 
   await client.from("profiles").update({ default_workspace_id: workspace.id }).eq("id", user.id);
 
@@ -273,6 +342,7 @@ async function main(): Promise<void> {
     Workspace    ${workspace.name} ${workspace.created ? "(created)" : "(existing)"}
     Admin area   ${appUrl}/admin
     Stages       ${stageCount} pipeline stages
+    Plan         ${planKey ? `${planKey} (active subscription)` : "none — no default plan in public.plans"}
     Credits      unlimited — scans and AI drafts are recorded but never billed
 ${user.password ? `\n    Password     ${user.password}\n                 Shown once. Change it after signing in.` : ""}${magicLink ? `\n    Sign-in link ${magicLink}\n                 Single use, expires shortly.` : ""}
 
