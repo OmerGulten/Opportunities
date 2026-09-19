@@ -25,6 +25,8 @@ export const errors: MessageTree = {
   feature_disabled: "This feature is currently disabled.",
   internal_error: "An unexpected error occurred. Please try again.",
   generic: "Something went wrong.",
+  /** Appends a driver error code so a user can quote it and we can search it. */
+  withReference: "{{message}} (code: {{code}})",
   tryAgain: "Try again",
   goHome: "Back to dashboard",
   notFoundTitle: "Page not found",

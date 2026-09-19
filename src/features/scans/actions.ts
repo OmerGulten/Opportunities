@@ -7,6 +7,7 @@ import { cancelScan, retryScan } from "@/features/scans/service";
 import type { ActionResult } from "@/features/workspace/schemas";
 import { getRequestLocale, requireWorkspaceContext } from "@/lib/auth/context";
 import { AppError, type ErrorCode } from "@/lib/errors";
+import { diagnosticCode, withReferenceCode } from "@/lib/errors/reference";
 import { getT } from "@/lib/i18n";
 import { createLogger } from "@/lib/logging";
 import type { ScanStatus } from "@/types/common";
@@ -22,10 +23,12 @@ const log = createLogger({ scope: "scans.actions" });
 
 const scanIdSchema = z.uuid();
 
-async function fail(code: ErrorCode): Promise<ActionResult<never>> {
-  const t = getT(await getRequestLocale(), "errors");
+async function fail(code: ErrorCode, reference: string | null = null): Promise<ActionResult<never>> {
+  const locale = await getRequestLocale();
+  const t = getT(locale, "errors");
   const message = t(code);
-  return { ok: false, error: { code, message: message === code ? t("generic") : message } };
+  const sentence = message === code ? t("generic") : message;
+  return { ok: false, error: { code, message: withReferenceCode(sentence, reference, locale) } };
 }
 
 async function failFrom(scope: string, cause: unknown): Promise<ActionResult<never>> {
@@ -33,8 +36,11 @@ async function failFrom(scope: string, cause: unknown): Promise<ActionResult<nev
     log.warn("scan_action_app_error", { scope, code: cause.code });
     return fail(cause.code);
   }
-  log.error("scan_action_failed", { scope, error: cause instanceof Error ? cause.message : String(cause) });
-  return fail("internal_error");
+  // Unrecognised failure: carry the driver's code so the screen and the log
+  // name the same thing.
+  const code = diagnosticCode(cause);
+  log.error("scan_action_failed", { scope, code, error: cause instanceof Error ? cause.message : String(cause) });
+  return fail("internal_error", code);
 }
 
 function revalidateScan(scanId: string): void {

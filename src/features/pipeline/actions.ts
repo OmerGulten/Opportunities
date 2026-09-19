@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { getRequestLocale, requireWorkspaceContext } from "@/lib/auth/context";
 import { AppError, type ErrorCode } from "@/lib/errors";
+import { diagnosticCode, withReferenceCode } from "@/lib/errors/reference";
 import { getT } from "@/lib/i18n";
 import { createLogger } from "@/lib/logging";
 import type { PipelineStageRow } from "@/types/db";
@@ -35,13 +36,17 @@ function fail(code: ErrorCode, message: string): PipelineActionResult<never> {
 }
 
 async function failUnexpected(scope: string, cause: unknown, messageKey: string): Promise<PipelineActionResult<never>> {
-  const t = await translate();
+  const locale = await getRequestLocale();
+  const t = getT(locale, "pipeline");
   if (cause instanceof AppError) {
     log.warn("action_app_error", { scope, code: cause.code });
     return fail(cause.code, t(messageKey));
   }
-  log.error("action_failed", { scope, error: cause instanceof Error ? cause.message : String(cause) });
-  return fail("internal_error", t(messageKey));
+  // The driver's code (SQLSTATE or PostgREST) is the difference between a
+  // report we can act on and "it failed".
+  const code = diagnosticCode(cause);
+  log.error("action_failed", { scope, code, error: cause instanceof Error ? cause.message : String(cause) });
+  return fail("internal_error", withReferenceCode(t(messageKey), code, locale));
 }
 
 function revalidateLead(leadId: string): void {

@@ -25,6 +25,8 @@ export const errors: MessageTree = {
   feature_disabled: "Bu özellik şu anda devre dışı.",
   internal_error: "Beklenmeyen bir hata oluştu. Lütfen tekrar deneyin.",
   generic: "Bir sorun oluştu.",
+  /** Appends a driver error code so a user can quote it and we can search it. */
+  withReference: "{{message}} (kod: {{code}})",
   tryAgain: "Tekrar deneyin",
   goHome: "Panele dön",
   notFoundTitle: "Sayfa bulunamadı",
