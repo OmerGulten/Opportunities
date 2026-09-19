@@ -51,7 +51,12 @@ const DEFAULT_FLAGS: FeatureFlags = {
   instagram_discovery: true,
   export_provider_content: false,
   public_reports: true,
-  api_keys: true,
+  // Off until the other half exists. The settings screen can mint, list and
+  // revoke keys, but nothing in the request path ever verifies one -- there is
+  // no API-key authentication layer. Shipping it enabled hands people a
+  // credential that grants nothing and implies an access model the application
+  // does not implement. Turn this on in the same change that adds verification.
+  api_keys: false,
 };
 
 export async function getFeatureFlags(): Promise<FeatureFlags> {
